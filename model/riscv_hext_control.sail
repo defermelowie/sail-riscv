@@ -1,0 +1,26 @@
+/* Hypervisor CSR and accessors */
+function clause ext_is_CSR_defined(0x600, _) = haveHExt()  /* hstatus */
+function clause ext_is_CSR_defined(0x602, _) = haveHExt()  /* hedeleg */
+function clause ext_is_CSR_defined(0x603, _) = haveHExt()  /* hideleg */
+function clause ext_is_CSR_defined(0x604, _) = haveHExt()  /* hie */
+function clause ext_is_CSR_defined(0x606, _) = haveHExt()  /* hcounteren */
+function clause ext_is_CSR_defined(0x607, _) = haveHExt()  /* hgeie */
+function clause ext_is_CSR_defined(0x643, _) = haveHExt()  /* htval */
+function clause ext_is_CSR_defined(0x644, _) = haveHExt()  /* hip */
+function clause ext_is_CSR_defined(0x645, _) = haveHExt()  /* hvip */
+function clause ext_is_CSR_defined(0x64A, _) = haveHExt()  /* htinst */
+function clause ext_is_CSR_defined(0xE12, _) = haveHExt()  /* hgeip */
+function clause ext_is_CSR_defined(0x60A, _) = haveHExt()  /* henvcfg */
+function clause ext_is_CSR_defined(0x61A, _) = haveHExt()  /* henvcfgh */
+function clause ext_is_CSR_defined(0x680, _) = haveHExt()  /* hgatp */
+function clause ext_is_CSR_defined(0x605, _) = haveHExt()  /* htimedelta */
+function clause ext_is_CSR_defined(0x615, _) = haveHExt()  /* htimedeltah */
+function clause ext_is_CSR_defined(0x200, _) = haveHExt()  /* vsstatus */
+function clause ext_is_CSR_defined(0x204, _) = haveHExt()  /* vsie */
+function clause ext_is_CSR_defined(0x205, _) = haveHExt()  /* vstvec */
+function clause ext_is_CSR_defined(0x240, _) = haveHExt()  /* vsscratch */
+function clause ext_is_CSR_defined(0x241, _) = haveHExt()  /* vsepc */
+function clause ext_is_CSR_defined(0x242, _) = haveHExt()  /* vscause */
+function clause ext_is_CSR_defined(0x243, _) = haveHExt()  /* vstval */
+function clause ext_is_CSR_defined(0x244, _) = haveHExt()  /* vsip */
+function clause ext_is_CSR_defined(0x280, _) = haveHExt()  /* vsatp */
