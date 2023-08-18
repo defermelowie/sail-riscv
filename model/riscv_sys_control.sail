@@ -560,6 +560,7 @@ function init_sys() -> unit = {
   misa->M()   = 0b1;                            /* integer multiply/divide */
   misa->U()   = 0b1;                            /* user-mode */
   misa->S()   = 0b1;                            /* supervisor-mode */
+  misa->H()   = bool_to_bits(sys_enable_hext());/* hypervisor extension */
 
   if   sys_enable_fdext() & sys_enable_zfinx()
   then internal_error(__FILE__, __LINE__, "F and Zfinx cannot both be enabled!");

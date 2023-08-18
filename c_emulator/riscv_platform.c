@@ -37,6 +37,11 @@ bool sys_enable_zfinx(unit u)
   return rv_enable_zfinx;
 }
 
+bool sys_enable_hext(unit u)
+{
+  return rv_enable_hext;
+}
+
 bool sys_enable_writable_misa(unit u)
 {
   return rv_enable_writable_misa;

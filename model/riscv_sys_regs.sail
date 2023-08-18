@@ -150,6 +150,8 @@ val sys_enable_fdext = {c: "sys_enable_fdext", ocaml: "Platform.enable_fdext", _
 val sys_enable_zfinx = {c: "sys_enable_zfinx", ocaml: "Platform.enable_zfinx", _: "sys_enable_zfinx"} : unit -> bool
 /* whether the N extension was enabled at boot */
 val sys_enable_next = {c: "sys_enable_next", ocaml: "Platform.enable_next", _: "sys_enable_next"} : unit -> bool
+/* whether the H extensions was enabled at boot */
+val sys_enable_hext = {c: "sys_enable_hext", ocaml: "Platform.enable_hext", _: "sys_enable_hext"} : unit -> bool
 
 /* This function allows an extension to veto a write to Misa
    if it would violate an alignment restriction on
@@ -182,6 +184,7 @@ function haveMulDiv()  -> bool = misa.M() == 0b1
 function haveSupMode() -> bool = misa.S() == 0b1
 function haveUsrMode() -> bool = misa.U() == 0b1
 function haveNExt()    -> bool = misa.N() == 0b1
+function haveHExt()    -> bool = misa.H() == 0b1
 /* see below for F and D (and Z*inx counterparts) extension tests */
 
 /* BitManip extension support. */
