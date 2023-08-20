@@ -600,6 +600,8 @@ function init_sys() -> unit = {
   minstret_increment = true;
 
   init_pmp();
+  if(sys_enable_hext())
+  then init_hext();
 
   // log compatibility with spike
   if   get_config_print_reg()

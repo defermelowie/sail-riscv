@@ -24,3 +24,10 @@ function clause ext_is_CSR_defined(0x242, _) = haveHExt()  /* vscause */
 function clause ext_is_CSR_defined(0x243, _) = haveHExt()  /* vstval */
 function clause ext_is_CSR_defined(0x244, _) = haveHExt()  /* vsip */
 function clause ext_is_CSR_defined(0x280, _) = haveHExt()  /* vsatp */
+
+function init_hext() -> unit = {
+  assert(sys_enable_hext());
+
+  /* Start with V=0 */
+  cur_virtualization = V0;
+}
