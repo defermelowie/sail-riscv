@@ -30,4 +30,26 @@ function init_hext() -> unit = {
 
   /* Start with V=0 */
   cur_virtualization = V0;
+
+  /* Init M-mode CRS fields */
+
+  if sizeof(xlen) == 32
+  then mstatush = set_mstatush_MPV(mstatush, virt_to_bits(V0))
+  else mstatus = set_mstatus_MPV(mstatus, virt_to_bits(V0));
+
+  if sizeof(xlen) == 32
+  then mstatush = set_mstatush_GVA(mstatush, 0b0)
+  else mstatus = set_mstatus_GVA(mstatus, 0b0);
+
+  /* TODO: mip */
+
+  mie = update_SGEI(mie, 0b0);
+  mie = update_VSEI(mie, 0b0);
+  mie = update_VSTI(mie, 0b0);
+  mie = update_VSSI(mie, 0b0);
+
+  mideleg = update_SGEI(mideleg, 0b1); /* TODO: SGEIE is "read-only one" only if GEILEN > 0 */
+  mideleg = update_VSEI(mideleg, 0b1);
+  mideleg = update_VSTI(mideleg, 0b1);
+  mideleg = update_VSSI(mideleg, 0b1);
 }
