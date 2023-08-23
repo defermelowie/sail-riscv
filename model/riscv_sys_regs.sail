@@ -589,7 +589,7 @@ function pc_alignment_mask() -> xlenbits =
 register mtval    : xlenbits
 register mtval2   : xlenbits /* Defined by hypervisor extension */
 register mscratch : xlenbits
-register minst    : xlenbits /* Defined by hypervisor extension */
+register mtinst   : xlenbits /* Defined by hypervisor extension */
 
 /* counters */
 
