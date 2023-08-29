@@ -119,9 +119,9 @@ function clause ext_read_CSR(0x602) = Some(get_hedeleg()) /* hedeleg */
 /* TODO: VS* CSR read access checks */
 function clause ext_read_CSR(0x200) = Some(get_vsstatus()) /* vsstatus */
 // function clause ext_read_CSR(0x204) = Some() /* vsie */
-function clause ext_read_CSR(0x205) = Some(get_vstvec()) /* vstvec */
+function clause ext_read_CSR(0x205) = Some(get_trap_vector(Supervisor, V1)) /* vstvec */
 function clause ext_read_CSR(0x240) = Some(get_vsscratch()) /* vsscratch */
-function clause ext_read_CSR(0x241) = Some(get_vsepc()) /* vsepc */
+function clause ext_read_CSR(0x241) = Some(get_xret_target(Supervisor, V1)) /* vsepc */
 function clause ext_read_CSR(0x242) = Some(get_vscause()) /* vscause */
 function clause ext_read_CSR(0x243) = Some(get_vstval()) /* vstval */
 // function clause ext_read_CSR(0x244) = Some() /* vsip */
@@ -132,9 +132,9 @@ function clause ext_write_CSR(0x600, value) = { hstatus = legalize_hstatus(hstat
 function clause ext_write_CSR(0x602, value) = { hedeleg = legalize_hedeleg(hedeleg, value); Some(get_hedeleg()) }
 /* TODO: VS* CSR write access checks */
 function clause ext_write_CSR(0x200, value) = { vsstatus = legalize_vsstatus(vsstatus, value); Some(get_vsstatus()) }
-// function clause ext_write_CSR(0x205, value) = { Some(set_trap_vector(Supervisor, V1, value)) }
+function clause ext_write_CSR(0x205, value) = { Some(set_trap_vector(Supervisor, V1, value)) }
 function clause ext_write_CSR(0x240, value) = { vsscratch = value; Some(get_vsscratch()) }
-// function clause ext_write_CSR(0x241, value) = { Some(set_xret_target(Supervisor, V1, value)) }
+function clause ext_write_CSR(0x241, value) = { Some(set_xret_target(Supervisor, V1, value)) }
 function clause ext_write_CSR(0x242, value) = { vscause->bits() = value; Some(get_vscause()) }
 function clause ext_write_CSR(0x243, value) = { vstval = value; Some(get_vstval()) }
 
@@ -148,8 +148,8 @@ function init_hext() -> unit = {
   /* Init M-mode CRSs */
 
   if sizeof(xlen) == 32
-  then mstatush = set_mstatush_MPV(mstatush, virt_to_bits(V0))
-  else mstatus = set_mstatus_MPV(mstatus, virt_to_bits(V0));
+  then mstatush = set_mstatush_MPV(mstatush, virtMode_to_bits(V0))
+  else mstatus = set_mstatus_MPV(mstatus, virtMode_to_bits(V0));
 
   if sizeof(xlen) == 32
   then mstatush = set_mstatush_GVA(mstatush, 0b0)

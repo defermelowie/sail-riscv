@@ -102,7 +102,7 @@ function readCSR csr : csreg -> xlenbits = {
     (0x320,  _) => zero_extend(mcountinhibit.bits()),
 
     (0x340,  _) => mscratch,
-    (0x341,  _) => get_xret_target(Machine) & pc_alignment_mask(),
+    (0x341,  _) => get_xret_target(Machine, V0) & pc_alignment_mask(),
     (0x342,  _) => mcause.bits(),
     (0x343,  _) => mtval,
     (0x344,  _) => mip.bits(),
@@ -146,7 +146,7 @@ function readCSR csr : csreg -> xlenbits = {
     (0x105,  _) => get_stvec(),
     (0x106,  _) => zero_extend(scounteren.bits()),
     (0x140,  _) => sscratch,
-    (0x141,  _) => get_xret_target(Supervisor) & pc_alignment_mask(),
+    (0x141,  _) => get_xret_target(Supervisor, V0) & pc_alignment_mask(),
     (0x142,  _) => scause.bits(),
     (0x143,  _) => stval,
     (0x144,  _) => lower_mip(mip, mideleg).bits(),
@@ -189,7 +189,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x310, 32) => { Some(mstatush.bits()) }, // ignore writes for now
     (0x320,  _) => { mcountinhibit = legalize_mcountinhibit(mcountinhibit, value); Some(zero_extend(mcountinhibit.bits())) },
     (0x340,  _) => { mscratch = value; Some(mscratch) },
-    (0x341,  _) => { Some(set_xret_target(Machine, value)) },
+    (0x341,  _) => { Some(set_xret_target(Machine, V0, value)) },
     (0x342,  _) => { mcause->bits() = value; Some(mcause.bits()) },
     (0x343,  _) => { mtval = value; Some(mtval) },
     (0x344,  _) => { mip = legalize_mip(mip, value); Some(mip.bits()) },
@@ -234,7 +234,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x105,  _) => { Some(set_stvec(value)) },
     (0x106,  _) => { scounteren = legalize_scounteren(scounteren, value); Some(zero_extend(scounteren.bits())) },
     (0x140,  _) => { sscratch = value; Some(sscratch) },
-    (0x141,  _) => { Some(set_xret_target(Supervisor, value)) },
+    (0x141,  _) => { Some(set_xret_target(Supervisor, cur_virtualization, value)) },
     (0x142,  _) => { scause->bits() = value; Some(scause.bits()) },
     (0x143,  _) => { stval = value; Some(stval) },
     (0x144,  _) => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) },
@@ -258,7 +258,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) = {
     CSRRW  => true,
     _      => if is_imm then unsigned(rs1_val) != 0 else unsigned(rs1) != 0
   };
-  if not(check_CSR(csr, cur_privilege, isWrite))
+  if not(check_CSR(csr, cur_privilege, cur_virtualization, isWrite))
   then { handle_illegal(); RETIRE_FAIL }
   else if not(ext_check_CSR(csr, cur_privilege, isWrite))
   then { ext_check_CSR_fail(); RETIRE_FAIL }
