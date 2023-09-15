@@ -87,7 +87,7 @@ val eq_anything = {ocaml: "(fun (x, y) -> x = y)", interpreter: "eq_anything", l
 
 overload operator == = {eq_string, eq_anything}
 
-val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+val "reg_deref" : forall ('a : Type). register('a) -> 'a
 /* sneaky deref with no effect necessary for bitfield writes */
 val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
@@ -138,8 +138,6 @@ function string_of_bit(b: bit) -> string =
 
 overload BitStr = {string_of_bits, string_of_bit}
 
-val xor_vec = {c: "xor_bits", _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
 val int_power = {ocaml: "int_power", interpreter: "int_power", lem: "pow", coq: "pow", c: "pow_int"} : (int, int) -> int
 
 overload operator ^ = {xor_vec, int_power, concat_str}
@@ -153,8 +151,8 @@ overload operator - = {sub_vec, sub_vec_int}
 val quot_round_zero = {ocaml: "quot_round_zero", interpreter: "quot_round_zero", lem: "hardware_quot", c: "tdiv_int", coq: "Z.quot"} : (int, int) -> int
 val rem_round_zero = {ocaml: "rem_round_zero", interpreter: "rem_round_zero", lem: "hardware_mod", c: "tmod_int", coq: "Z.rem"} : (int, int) -> int
 
-/* The following should get us euclidean modulus, and is compatible with pre and post 0.9 versions of sail */
-overload operator % = {emod_int, mod}
+/* The following defines % as euclidean modulus */
+overload operator % = {emod_int}
 
 val min_int = {ocaml: "min_int", interpreter: "min_int", lem: "min", coq: "min_atom", c: "min_int"} : forall 'x 'y.
   (int('x), int('y)) -> {'z, ('x <= 'y & 'z == 'x) | ('x > 'y & 'z == 'y). int('z)}
