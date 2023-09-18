@@ -139,18 +139,18 @@ function readCSR csr : csreg -> xlenbits = {
     (0x7a0,  _) => ~(tselect),  /* this indicates we don't have any trigger support */
 
     /* supervisor mode */
-    (0x100,  _) => lower_mstatus(mstatus).bits(),
+    (0x100,  _) => if cur_virtualization == V1 then get_vsstatus() else lower_mstatus(mstatus).bits(),
     (0x102,  _) => sedeleg.bits(),
     (0x103,  _) => sideleg.bits(),
-    (0x104,  _) => lower_mie(mie, mideleg).bits(),
-    (0x105,  _) => get_stvec(),
+    (0x104,  _) => lower_mie(mie, mideleg).bits(), /* TODO: read vsie when V=1 */
+    (0x105,  _) => get_trap_vector(Supervisor, cur_virtualization),
     (0x106,  _) => zero_extend(scounteren.bits()),
-    (0x140,  _) => sscratch,
-    (0x141,  _) => get_xret_target(Supervisor, V0) & pc_alignment_mask(),
-    (0x142,  _) => scause.bits(),
-    (0x143,  _) => stval,
-    (0x144,  _) => lower_mip(mip, mideleg).bits(),
-    (0x180,  _) => satp,
+    (0x140,  _) => if cur_virtualization == V1 then get_vsscratch() else sscratch,
+    (0x141,  _) => get_xret_target(Supervisor, cur_virtualization) & pc_alignment_mask(),
+    (0x142,  _) => if cur_virtualization == V1 then get_vscause() else scause.bits(),
+    (0x143,  _) => if cur_virtualization == V1 then get_vstval() else stval,
+    (0x144,  _) => lower_mip(mip, mideleg).bits(), /* TODO: read vsip when V=1 */
+    (0x180,  _) => satp, /* TODO: read vsatp when V=1 */
 
     /* user mode counters */
     (0xC00,  _) => mcycle[(sizeof(xlen) - 1) .. 0],
@@ -227,18 +227,30 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x7a0,  _) => { tselect = value; Some(tselect) },
 
     /* supervisor mode */
-    (0x100,  _) => { mstatus = legalize_sstatus(mstatus, value); Some(mstatus.bits()) },
+    (0x100,  _) => match cur_virtualization {
+                    V0 => { mstatus = legalize_sstatus(mstatus, value); Some(mstatus.bits()) },
+                    V1 => { vsstatus = legalize_vsstatus(vsstatus, value); Some(get_vsstatus()) }
+                  },
     (0x102,  _) => { sedeleg = legalize_sedeleg(sedeleg, value); Some(sedeleg.bits()) },
     (0x103,  _) => { sideleg->bits() = value; Some(sideleg.bits()) }, /* TODO: does this need legalization? */
-    (0x104,  _) => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) },
-    (0x105,  _) => { Some(set_stvec(value)) },
+    (0x104,  _) => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) }, /* TODO: set vsie when V=1 */
+    (0x105,  _) => { Some(set_trap_vector(Supervisor, cur_virtualization, value)) },
     (0x106,  _) => { scounteren = legalize_scounteren(scounteren, value); Some(zero_extend(scounteren.bits())) },
-    (0x140,  _) => { sscratch = value; Some(sscratch) },
+    (0x140,  _) => match cur_virtualization {
+                    V0 => { sscratch = value; Some(sscratch) },
+                    V1 => { vsscratch = value; Some(vsscratch) },
+                  },
     (0x141,  _) => { Some(set_xret_target(Supervisor, cur_virtualization, value)) },
-    (0x142,  _) => { scause->bits() = value; Some(scause.bits()) },
-    (0x143,  _) => { stval = value; Some(stval) },
-    (0x144,  _) => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) },
-    (0x180,  _) => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) },
+    (0x142,  _) => match cur_virtualization {
+                    V0 => { scause->bits() = value; Some(scause.bits()) },
+                    V1 => { vscause->bits() = value; Some(get_vscause()) }
+                },
+    (0x143,  _) => match cur_virtualization {
+                    V0 => { stval = value; Some(stval) },
+                    V1 => { vstval = value; Some(vstval) }
+                  },
+    (0x144,  _) => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) }, /* TODO: set vsip when V=1 */
+    (0x180,  _) => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) }, /* TODO: set vsatp when V=1 */
 
     /* user mode: seed (entropy source). writes are ignored */
     (0x015,  _) => write_seed_csr(),

@@ -152,6 +152,15 @@ function legalize_hedeleg(o: Medeleg, v: xlenbits) -> Medeleg = {
   h
 }
 
+/* TODO: hideleg */
+/* TODO: hie */
+
+/* **************************************************************** */
+/* TODO: Hypervisor Counter Enable                                  */
+
+/* **************************************************************** */
+/* TODO: Hypervisor Guest External Interrupt-Enable                 */
+
 /* **************************************************************** */
 /* Virtual Supervisor Status Register                               */
 
@@ -201,8 +210,8 @@ function legalize_vsstatus(vs: Vsstatus, v: xlenbits) -> Vsstatus = {
 
 register vstvec : Mtvec
 
-/* get_vstvec is defined in ./model/riscv_sys_exceptions.sail */
-/* set_vstvec is defined in ./model/riscv_sys_exceptions.sail */
+/* get_vstvec is defined in riscv_sys_exceptions.sail */
+/* set_vstvec is defined in riscv_sys_exceptions.sail */
 
 /* **************************************************************** */
 /* Virtual Supervisor Scratch Register                              */
@@ -239,3 +248,9 @@ register vstval : xlenbits
 function get_vstval() -> xlenbits = {
   vstval
 }
+
+/* **************************************************************** */
+/* TODO: Virtual Supervisor interrupt pending                       */
+
+/* **************************************************************** */
+/* TODO: Virtual Supervisor address translation & Protection        */
