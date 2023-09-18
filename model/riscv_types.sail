@@ -245,6 +245,14 @@ union ExceptionType = {
  E_Load_Page_Fault    : unit,
  E_Reserved_14        : unit,
  E_SAMO_Page_Fault    : unit,
+ E_Reserved_16        : unit,
+ E_Reserved_17        : unit,
+ E_Reserved_18        : unit,
+ E_Reserved_19        : unit,
+ E_Fetch_GPage_Fault  : unit,
+ E_Load_GPage_Fault   : unit,
+ E_Virtual_Instr      : unit,
+ E_SAMO_GPage_Fault   : unit,
 
  /* extensions */
  E_Extension          : ext_exc_type
@@ -269,6 +277,14 @@ function exceptionType_to_bits(e) =
     E_Load_Page_Fault()    => 0x0d,
     E_Reserved_14()        => 0x0e,
     E_SAMO_Page_Fault()    => 0x0f,
+    E_Reserved_16()        => 0x10,
+    E_Reserved_17()        => 0x11,
+    E_Reserved_18()        => 0x12,
+    E_Reserved_19()        => 0x13,
+    E_Fetch_GPage_Fault()  => 0x14,
+    E_Load_GPage_Fault()   => 0x15,
+    E_Virtual_Instr()      => 0x16,
+    E_SAMO_GPage_Fault()   => 0x17,
 
     /* extensions */
     E_Extension(e)         => ext_exc_type_to_bits(e)
@@ -293,6 +309,14 @@ function num_of_ExceptionType(e) =
     E_Load_Page_Fault()    => 13,
     E_Reserved_14()        => 14,
     E_SAMO_Page_Fault()    => 15,
+    E_Reserved_16()        => 16,
+    E_Reserved_17()        => 17,
+    E_Reserved_18()        => 18,
+    E_Reserved_19()        => 19,
+    E_Fetch_GPage_Fault()  => 20,
+    E_Load_GPage_Fault()   => 21,
+    E_Virtual_Instr()      => 22,
+    E_SAMO_GPage_Fault()   => 23,
 
     /* extensions */
     E_Extension(e)         => num_of_ext_exc_type(e)
@@ -316,8 +340,16 @@ function exceptionType_to_str(e) =
     E_M_EnvCall()          => "m-call",
     E_Fetch_Page_Fault()   => "fetch-page-fault",
     E_Load_Page_Fault()    => "load-page-fault",
-    E_Reserved_14()        => "reserved-1",
+    E_Reserved_14()        => "reserved-14",
     E_SAMO_Page_Fault()    => "store/amo-page-fault",
+    E_Reserved_16()        => "reserved-16",
+    E_Reserved_17()        => "reserved-17",
+    E_Reserved_18()        => "reserved-18",
+    E_Reserved_19()        => "reserved-19",
+    E_Fetch_GPage_Fault()  => "fetch-guest-page-fault",
+    E_Load_GPage_Fault()   => "load-guest-page-fault",
+    E_Virtual_Instr()      => "virtual-instruction",
+    E_SAMO_GPage_Fault()   => "store/amo-guest-page-fault",
 
     /* extensions */
     E_Extension(e)         => ext_exc_type_to_str(e)

@@ -510,6 +510,17 @@ function handle_illegal() -> unit = {
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
 }
 
+/* Platform-specific handling of virtual instruction traps */
+function handle_virtual_instr() -> unit = {
+  let info = if plat_mtval_has_illegal_inst_bits ()
+             then Some(instbits)
+             else None();
+  let t : sync_exception = struct { trap    = E_Virtual_Instr(),
+                                    excinfo = info,
+                                    ext     = None() };
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
+}
+
 /* Platform-specific wait-for-interrupt */
 
 function platform_wfi() -> unit = {
