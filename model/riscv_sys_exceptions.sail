@@ -86,7 +86,7 @@ function handle_trap_extension(p : Privilege, pc : xlenbits, u : option(unit)) -
  * prepare_xret_target: used to get the value for control transfer to the xret target
  */
 
-val get_xret_target : (Privilege, Virtualization) -> xlenbits effect {rreg}
+val get_xret_target : (Privilege, Virtualization) -> xlenbits
 function get_xret_target(p, v) =
   match p {
     Machine => mepc,
@@ -97,7 +97,7 @@ function get_xret_target(p, v) =
     User => uepc
   }
 
-val set_xret_target : (Privilege, Virtualization, xlenbits) -> xlenbits effect {rreg, wreg}
+val set_xret_target : (Privilege, Virtualization, xlenbits) -> xlenbits
 function set_xret_target(p, v, value) = {
   let target = legalize_xepc(value);
   match p {
@@ -111,7 +111,7 @@ function set_xret_target(p, v, value) = {
   target
 }
 
-val prepare_xret_target : (Privilege, Virtualization) -> xlenbits effect {rreg, wreg}
+val prepare_xret_target : (Privilege, Virtualization) -> xlenbits
 function prepare_xret_target(p, v) =
   get_xret_target(p, v)
 

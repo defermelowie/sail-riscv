@@ -156,7 +156,7 @@ val sys_enable_hext = {c: "sys_enable_hext", ocaml: "Platform.enable_hext", _: "
 /* This function allows an extension to veto a write to Misa
    if it would violate an alignment restriction on
    unsetting C. If it returns true the write will have no effect. */
-val ext_veto_disable_C : unit -> bool effect {rreg}
+val ext_veto_disable_C : unit -> bool
 
 function legalize_misa(m : Misa, v : xlenbits) -> Misa = {
   let  v = Mk_Misa(v);
