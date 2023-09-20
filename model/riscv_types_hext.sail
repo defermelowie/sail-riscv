@@ -68,21 +68,29 @@
 /*  SUCH DAMAGE.                                                                         */
 /*=======================================================================================*/
 
-/* *****************************************************************/
-/* This file specifies the instruction added by the 'N' extension. */
+/* Virtualization modes */
+enum Virtualization = {V0, V1}
+type virt_mode = bits(1)
 
-union clause ast = URET : unit
+val virtMode_of_bits : virt_mode -> Virtualization
+function virtMode_of_bits(v) =
+    match (v) {
+    0b0 => V0,
+    0b1 => V1
+  }
 
-mapping clause encdec = URET()
-  <-> 0b0000000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
+val virtMode_to_bits : Virtualization -> virt_mode
+function virtMode_to_bits (v) =
+  match (v) {
+    V0 => 0b0,
+    V1 => 0b1
+  }
 
-function clause execute URET() = {
-  if   not(haveUsrMode()) | not(sys_enable_next())
-  then handle_illegal()
-  else if not(ext_check_xret_priv(User))
-  then ext_fail_xret_priv()
-  else set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_URET(), PC));
-  RETIRE_FAIL
-}
+val virtMode_to_str : Virtualization -> string
+function virtMode_to_str (v) =
+  match (v) {
+    V0 => "V=0",
+    V1 => "V=1"
+  }
 
-mapping clause assembly = URET() <-> "uret"
+overload to_str = {virtMode_to_str}

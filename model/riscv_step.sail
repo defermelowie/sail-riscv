@@ -90,7 +90,7 @@ function step(step_no : int) -> bool = {
       Some(intr, priv) => {
         if   get_config_print_instr()
         then print_bits("Handling interrupt: ", interruptType_to_bits(intr));
-        handle_interrupt(intr, priv);
+        handle_interrupt(intr, priv, V0); /* TODO: review the use of V0 here */
         (RETIRE_FAIL, false)
       },
       None() => {

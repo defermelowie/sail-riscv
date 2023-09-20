@@ -150,6 +150,8 @@ val sys_enable_fdext = {c: "sys_enable_fdext", ocaml: "Platform.enable_fdext", _
 val sys_enable_zfinx = {c: "sys_enable_zfinx", ocaml: "Platform.enable_zfinx", _: "sys_enable_zfinx"} : unit -> bool
 /* whether the N extension was enabled at boot */
 val sys_enable_next = {c: "sys_enable_next", ocaml: "Platform.enable_next", _: "sys_enable_next"} : unit -> bool
+/* whether the H extensions was enabled at boot */
+val sys_enable_hext = {c: "sys_enable_hext", ocaml: "Platform.enable_hext", _: "sys_enable_hext"} : unit -> bool
 
 /* This function allows an extension to veto a write to Misa
    if it would violate an alignment restriction on
@@ -179,6 +181,7 @@ function haveMulDiv()  -> bool = misa.M() == 0b1
 function haveSupMode() -> bool = misa.S() == 0b1
 function haveUsrMode() -> bool = misa.U() == 0b1
 function haveNExt()    -> bool = misa.N() == 0b1
+function haveHExt()    -> bool = misa.H() == 0b1
 /* see below for F and D (and Z*inx counterparts) extension tests */
 
 /* BitManip extension support. */
@@ -211,6 +214,8 @@ function haveZmmul()  -> bool = true
 function haveZicond() -> bool = true
 
 bitfield Mstatush : bits(32) = {
+  MPV  : 7,
+  GVA  : 6,
   MBE  : 5,
   SBE  : 4
 }
@@ -219,11 +224,13 @@ register mstatush : Mstatush
 bitfield Mstatus : xlenbits = {
   SD   : xlen - 1,
 
-  // The MBE and SBE fields are in mstatus in RV64 and absent in RV32.
+  // These fields are in mstatus in RV64 and absent in RV32.
   // On RV32, they are in mstatush, which doesn't exist in RV64.  For now,
   // they are handled in an ad-hoc way.
-  // MBE  : 37
-  // SBE  : 36
+  // MPV  : 39,
+  // GVA  : 38,
+  // MBE  : 37,
+  // SBE  : 36,
 
   // The SXL and UXL fields don't exist on RV32, so they are modelled
   // via explicit getters and setters; see below.
@@ -288,6 +295,48 @@ function set_mstatus_UXL(m : Mstatus, a : arch_xlen) -> Mstatus = {
   }
 }
 
+function get_mstatus_GVA(m : Mstatus, mh : Mstatush) -> bits(1) = {
+  if sizeof(xlen) == 32
+  then mh.GVA()
+  else m.bits()[38 .. 38]
+}
+
+function set_mstatus_GVA(m : Mstatus, gva : bits(1)) -> Mstatus = {
+  if sizeof(xlen) == 32
+  then m
+  else {
+    let m = vector_update_subrange(m.bits(), 38, 38, gva);
+    Mk_Mstatus(m)
+  }
+}
+
+function set_mstatush_GVA(mh : Mstatush, gva : bits(1)) -> Mstatush = {
+  if sizeof(xlen) == 32
+  then update_GVA(mh, gva)
+  else mh
+}
+
+function get_mstatus_MPV(m : Mstatus, mh: Mstatush) -> virt_mode = {
+  if sizeof(xlen) == 32
+  then mh.MPV()
+  else m.bits()[39 .. 39]
+}
+
+function set_mstatus_MPV(m : Mstatus, v : virt_mode) -> Mstatus = {
+  if sizeof(xlen) == 32
+  then m
+  else {
+    let m = vector_update_subrange(m.bits(), 39, 39, v);
+    Mk_Mstatus(m)
+  }
+}
+
+function set_mstatush_MPV(mh : Mstatush, v : virt_mode) -> Mstatush = {
+  if sizeof(xlen) == 32
+  then update_MPV(mh, v)
+  else mh
+}
+
 function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   /*
    * Populate all defined fields using the bits of v, stripping anything
@@ -316,6 +365,10 @@ function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   let m = if sizeof(xlen) == 64 then {
              Mk_Mstatus([m.bits() with 37 .. 36 = 0b00])
           } else m;
+
+  /* Update GVA & MPV */
+  let m = if sizeof(xlen) == 32 then m
+          else Mk_Mstatus([m.bits() with 39 .. 38 = v[39 .. 38]]);
 
   /* Hardwired to zero in the absence of 'U' or 'N'. */
   let m = if not(haveNExt()) then {
@@ -363,17 +416,21 @@ function haveZdinx()   -> bool = sys_enable_zfinx() & sizeof(flen) >= 64
 /* interrupt processing state */
 
 bitfield Minterrupts : xlenbits = {
-  MEI : 11, /* external interrupts */
-  SEI : 9,
-  UEI : 8,
+  SGEI : 12, /* external interrupts */
+  MEI  : 11,
+  VSEI : 10,
+  SEI  : 9,
+  UEI  : 8,
 
-  MTI : 7,  /* timers interrupts */
-  STI : 5,
-  UTI : 4,
+  MTI  : 7,  /* timers interrupts */
+  VSTI : 6,
+  STI  : 5,
+  UTI  : 4,
 
-  MSI : 3,  /* software interrupts */
-  SSI : 1,
-  USI : 0,
+  MSI  : 3,  /* software interrupts */
+  VSSI : 2,
+  SSI  : 1,
+  USI  : 0,
 }
 register mip     : Minterrupts /* Pending */
 register mie     : Minterrupts /* Enabled */
@@ -386,6 +443,7 @@ function legalize_mip(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_SEI(o, v.SEI());
   let m = update_STI(m, v.STI());
   let m = update_SSI(m, v.SSI());
+  /* TODO: handle SGEI, VSEI, VSTI & VSSI */
   if haveUsrMode() & haveNExt() then {
     let m = update_UEI(m, v.UEI());
     let m = update_UTI(m, v.UTI());
@@ -402,6 +460,14 @@ function legalize_mie(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_SEI(m, v.SEI());
   let m = update_STI(m, v.STI());
   let m = update_SSI(m, v.SSI());
+  /* These interrupts can only be enabled when the hypervisor extention is present */
+  if haveHExt() then {
+    /* FIXME: "the nonzero bits in sie & hie(=mie) are mutually exlusive" */
+    let m = update_SGEI(m, v.SGEI());
+    let m = update_VSEI(m, v.VSEI());
+    let m = update_VSTI(m, v.VSTI());
+    let m = update_VSSI(m, v.VSSI());
+  };
   /* The U-mode bits will be modified if we have the 'N' extension. */
   if haveUsrMode() & haveNExt() then {
     let m = update_UEI(m, v.UEI());
@@ -418,17 +484,31 @@ function legalize_mideleg(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_MEI(m, 0b0);
   let m = update_MTI(m, 0b0);
   let m = update_MSI(m, 0b0);
+
+  /* VS-mode interrupt delegation bits are "read-only one" when the hypervisor extension is implemented */
+  if haveHExt() then {
+    let m = update_SGEI(m, 0b1); /* TODO: SGEI is "read-only one" only if GEILEN > 0 */
+    let m = update_VSEI(m, 0b1);
+    let m = update_VSTI(m, 0b1);
+    let m = update_VSSI(m, 0b1);
+  };
+
   m
 }
 
 /* exception processing state */
 
 bitfield Medeleg : xlenbits = {
+  SAMO_GPage_Fault  : 23,
+  Virtual_Instr     : 22,
+  Load_GPage_Fault  : 21,
+  Fetch_GPage_Fault : 20,
   SAMO_Page_Fault   : 15,
   Load_Page_Fault   : 13,
   Fetch_Page_Fault  : 12,
-  MEnvCall          : 10,
-  SEnvCall          : 9,
+  MEnvCall          : 11,
+  VSEnvCall         : 10,
+  HSEnvCall         : 9,
   UEnvCall          : 8,
   SAMO_Access_Fault : 7,
   SAMO_Addr_Align   : 6,
@@ -504,7 +584,9 @@ function pc_alignment_mask() -> xlenbits =
 /* auxiliary exception registers */
 
 register mtval    : xlenbits
+register mtval2   : xlenbits /* Defined by hypervisor extension */
 register mscratch : xlenbits
+register mtinst   : xlenbits /* Defined by hypervisor extension */
 
 /* counters */
 

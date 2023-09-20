@@ -124,6 +124,7 @@ static struct option options[] = {
     {"disable-compressed",          no_argument,       0, 'C'             },
     {"disable-writable-misa",       no_argument,       0, 'I'             },
     {"disable-fdext",               no_argument,       0, 'F'             },
+    {"disable-hext",                no_argument,       0, 'H'             },
     {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'             },
     {"device-tree-blob",            required_argument, 0, 'b'             },
     {"terminal-log",                required_argument, 0, 't'             },
@@ -240,6 +241,7 @@ char *process_args(int argc, char **argv)
                     "N"
                     "I"
                     "F"
+                    "H"
                     "i"
                     "s"
                     "p"
@@ -294,6 +296,9 @@ char *process_args(int argc, char **argv)
       fprintf(stderr, "disabling floating point (F and D extensions).\n");
       rv_enable_fdext = false;
       break;
+    case 'H':
+      fprintf(stderr, "disabling hypervisor extension.\n");
+      rv_enable_hext = false;
     case 'i':
       fprintf(stderr, "enabling storing illegal instruction bits in mtval.\n");
       rv_mtval_has_illegal_inst_bits = true;

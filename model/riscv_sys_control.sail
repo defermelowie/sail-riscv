@@ -166,10 +166,18 @@ function is_CSR_defined (csr : csreg, p : Privilege) -> bool =
     _     => ext_is_CSR_defined(csr, p)
   }
 
-val check_CSR_access : (csrRW, priv_level, Privilege, bool) -> bool
-function check_CSR_access(csrrw, csrpr, p, isWrite) =
-    not(isWrite == true & csrrw == 0b11)  /* read/write */
-  & (privLevel_to_bits(p) >=_u csrpr)      /* privilege */
+val check_CSR_access : (csrRW, priv_level, Privilege, Virtualization, bool) -> bool
+function check_CSR_access(csrrw, csrpr, p, v, isWrite) = {
+  let check_priv: bool = match p { /* privilege */
+    Machine => (privLevel_to_bits(Machine) >=_u csrpr),
+    Supervisor => match v {
+      V0 => (0b10>=_u csrpr), /* hypervisor CSRs (0b10) are accessible in HS-mode */
+      V1 => (privLevel_to_bits(Supervisor) >=_u csrpr)},
+    User => (privLevel_to_bits(User) >=_u csrpr),
+  };
+  let check_RW = not(isWrite == true & csrrw == 0b11);  /* read/write */
+  check_priv & check_RW
+}
 
 function check_TVM_SATP(csr : csreg, p : Privilege) -> bool =
   not(csr == 0x180 & p == Supervisor & mstatus.TVM() == 0b1)
@@ -209,9 +217,9 @@ function check_seed_CSR (csr : csreg, p : Privilege, isWrite : bool) -> bool = {
   }
 }
 
-function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
+function check_CSR(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
     is_CSR_defined(csr, p)
-  & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
+  & check_CSR_access(csrAccess(csr), csrPriv(csr), p, v, isWrite)
   & check_TVM_SATP(csr, p)
   & check_Counteren(csr, p)
   & check_seed_CSR(csr, p, isWrite)
@@ -234,22 +242,54 @@ val load_reservation = {ocaml: "Platform.load_reservation", interpreter: "Platfo
 val match_reservation = {ocaml: "Platform.match_reservation", interpreter: "Platform.match_reservation", lem: "match_reservation", c: "match_reservation"} : xlenbits -> bool
 val cancel_reservation = {ocaml: "Platform.cancel_reservation", interpreter: "Platform.cancel_reservation", c: "cancel_reservation", lem: "cancel_reservation"} : unit -> unit
 
-/* Exception delegation: given an exception and the privilege at which
- * it occured, returns the privilege at which it should be handled.
+/* Exception delegation: given an exception and the privilege/virtualization mode at which
+ * it occured, returns the privilege/virtualization mode at which it should be handled.
  */
-function exception_delegatee(e : ExceptionType, p : Privilege) -> Privilege = {
-  let idx   = num_of_ExceptionType(e);
-  let super = bit_to_bool(medeleg.bits()[idx]);
-  /* if S-mode is absent, medeleg delegates to U-mode if 'N' is supported. */
-  let user  = if   haveSupMode()
-              then super & haveNExt() & bit_to_bool(sedeleg.bits()[idx])
-              else super & haveNExt();
-  let deleg = if      haveUsrMode() & user  then User
-              else if haveSupMode() & super then Supervisor
-              else                               Machine;
-  /* We cannot transition to a less-privileged mode. */
-  if   privLevel_to_bits(deleg) <_u privLevel_to_bits(p)
-  then p else deleg
+function exception_delegatee(e : ExceptionType, cur_p: Privilege, cur_v : Virtualization) -> (Privilege, Virtualization) = {
+  /* Determine delegation privilege and virtualization mode based on xedeleg CSRs
+   *
+   * medeleg delegates to HS-mode
+   * hedeleg delegates to VS-mode
+   * sedeleg delegates to (V)U-mode
+   */
+  let idx = num_of_ExceptionType(e);
+  let del_to_hs = bit_to_bool(medeleg.bits()[idx]);
+  let del_to_vs = bit_to_bool(hedeleg.bits()[idx]);
+  let del_to_u  = bit_to_bool(sedeleg.bits()[idx]);
+  let (del_p, del_v): (Privilege, Virtualization) = match cur_v {
+    V0 => match (del_to_hs, del_to_u) {
+      (false, _)    => (Machine, V0),
+      (true, false) => (Supervisor, V0),
+      (true, true)  => (User, V0)
+    },
+    V1 => match (del_to_hs, del_to_vs, del_to_u) {
+      (false, _, _)       => (Machine, V0),
+      (true, false, _)    => (Supervisor, V0),
+      (true, true, false) => (Supervisor, V1),
+      (true, true, true)  => (User, V1)
+    }
+  };
+  /* Check if delegation privilege exists:
+   *
+   * if S-mode is absent, medeleg delegates directly to U-mode if 'N' is supported
+   */
+  let (del_p, del_v): (Privilege, Virtualization) = match del_p {
+    Machine    => (Machine, V0),
+    Supervisor => if haveSupMode() then (Supervisor, del_v)
+                  else if haveNExt() then (User, cur_v) /* Use original virt mode when delegating directly to U-mode, otherwise a trap attempt from VU->HS would end up in U */
+                  else (Machine, V0),
+    User       => if haveUsrMode() then (User, del_v)
+                  else if haveSupMode() then (Supervisor, del_v)
+                  else (Machine, V0)
+  };
+  /* Check transition to less-privileged mode:
+   *
+   * trap delegation should never cause a transition to a lower privilege mode
+   * trap delegation should never cause a transition to a more virtualized mode
+   */
+  if (privLevel_to_bits(del_p) >=_u privLevel_to_bits(cur_p)) & (virtMode_to_bits(del_v) <=_u virtMode_to_bits(cur_v))
+  then (del_p, del_v)
+  else (cur_p, cur_v)
 }
 
 /* Interrupts are prioritized in privilege order, and for each
@@ -388,60 +428,107 @@ $endif
 
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
 
-function trap_handler(del_priv : Privilege, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits), ext : option(ext_exception))
+function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits), ext : option(ext_exception))
                      -> xlenbits = {
   rvfi_trap();
   if   get_config_print_platform()
   then print_platform("handling " ^ (if intr then "int#" else "exc#")
-                      ^ BitStr(c) ^ " at priv " ^ to_str(del_priv)
+                      ^ BitStr(c) ^ " at priv " ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")"
                       ^ " with tval " ^ BitStr(tval(info)));
 
   cancel_reservation();
 
   match (del_priv) {
     Machine => {
-       mcause->IsInterrupt() = bool_to_bits(intr);
-       mcause->Cause()       = zero_extend(c);
+      mcause->IsInterrupt() = bool_to_bits(intr);
+      mcause->Cause()       = zero_extend(c);
 
-       mstatus->MPIE() = mstatus.MIE();
-       mstatus->MIE()  = 0b0;
-       mstatus->MPP()  = privLevel_to_bits(cur_privilege);
-       mtval           = tval(info);
-       mepc            = pc;
+      mstatus->MPIE() = mstatus.MIE();
+      mstatus->MIE()  = 0b0;
+      mstatus->MPP()  = privLevel_to_bits(cur_privilege);
+      if sizeof(xlen) == 32
+      then mstatush = set_mstatush_MPV(mstatush, virtMode_to_bits(cur_virtualization))
+      else mstatus = set_mstatus_MPV(mstatus, virtMode_to_bits(cur_virtualization));
+      /* TODO: Set mstatus(h).GVA when a guest virtual address is written to mtval */
 
-       cur_privilege   = del_priv;
+      mtval           = tval(info);
+      /* TODO: Write mtval2 */
+      mepc            = pc;
+      /* TODO: Write mtinst */
 
-       handle_trap_extension(del_priv, pc, ext);
+      cur_privilege   = del_priv;
+      cur_virtualization = del_virt;
 
-       if   get_config_print_reg()
-       then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
+      handle_trap_extension(del_priv, pc, ext);
 
-       prepare_trap_vector(del_priv, mcause)
+      if   get_config_print_reg()
+      then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
+      if (sizeof(xlen) == 32) & get_config_print_reg()
+      then print_reg("CSR mstatush <- " ^ BitStr(mstatush.bits()));
+
+      prepare_trap_vector(del_priv, del_virt, mcause)
     },
-    Supervisor => {
-       assert (haveSupMode(), "no supervisor mode present for delegation");
+    Supervisor => match (del_virt) {
+      V0 => {
+        assert (haveSupMode(), "no supervisor mode present for delegation");
 
-       scause->IsInterrupt() = bool_to_bits(intr);
-       scause->Cause()       = zero_extend(c);
+        scause->IsInterrupt() = bool_to_bits(intr);
+        scause->Cause()       = zero_extend(c);
 
-       mstatus->SPIE() = mstatus.SIE();
-       mstatus->SIE()  = 0b0;
-       mstatus->SPP()  = match cur_privilege {
-                           User => 0b0,
-                           Supervisor => 0b1,
-                           Machine => internal_error(__FILE__, __LINE__, "invalid privilege for s-mode trap")
-                         };
-       stval           = tval(info);
-       sepc            = pc;
+        mstatus->SPIE() = mstatus.SIE();
+        mstatus->SIE()  = 0b0;
+        mstatus->SPP()  = match cur_privilege {
+          User => 0b0,
+          Supervisor => 0b1,
+          Machine => internal_error(__FILE__, __LINE__, "invalid privilege for s-mode trap")
+        };
 
-       cur_privilege   = del_priv;
+        hstatus->SPV() = virtMode_to_bits(cur_virtualization);
+        if cur_virtualization == V1 then hstatus->SPVP() = mstatus.SPP();
+        /* TODO: Set hstatus.GVA when a guest virtual address is written to stval */
 
-       handle_trap_extension(del_priv, pc, ext);
+        stval           = tval(info);
+        /* TODO: Write htval */
+        sepc            = pc;
+        /* TODO: Write htinst */
 
-       if   get_config_print_reg()
-       then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
+        cur_privilege   = del_priv;
+        cur_virtualization = del_virt;
 
-       prepare_trap_vector(del_priv, scause)
+        handle_trap_extension(del_priv, pc, ext);
+
+        if   get_config_print_reg()
+        then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
+
+        prepare_trap_vector(del_priv, del_virt, scause)
+      },
+      V1 => {
+        assert (haveSupMode() & haveHExt(), "no virtual supervisor mode present for delegation");
+
+        vscause->IsInterrupt() = bool_to_bits(intr);
+        vscause->Cause()       = zero_extend(c);
+
+        vsstatus->SPIE() = mstatus.SIE();
+        vsstatus->SIE()  = 0b0;
+        vsstatus->SPP()  = match cur_privilege {
+          User => 0b0,
+          Supervisor => 0b1,
+          Machine => internal_error(__FILE__, __LINE__, "invalid privilege for vs-mode trap")
+        };
+
+        vstval = tval(info);
+        vsepc  = pc;
+
+        cur_privilege   = del_priv;
+        cur_virtualization = del_virt;
+
+        handle_trap_extension(del_priv, pc, ext);
+
+        if   get_config_print_reg()
+        then print_reg("CSR vsstatus <- " ^ BitStr(vsstatus.bits()));
+
+        prepare_trap_vector(del_priv, del_virt, vscause)
+      }
     },
     User => {
        assert(haveUsrMode(), "no user mode present for delegation");
@@ -455,64 +542,98 @@ function trap_handler(del_priv : Privilege, intr : bool, c : exc_code, pc : xlen
        uepc            = pc;
 
        cur_privilege   = del_priv;
+       cur_virtualization = del_virt;
 
        handle_trap_extension(del_priv, pc, ext);
 
        if   get_config_print_reg()
        then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
 
-       prepare_trap_vector(del_priv, ucause)
+       prepare_trap_vector(del_priv, del_virt, ucause)
     }
   };
 }
 
-function exception_handler(cur_priv : Privilege, ctl : ctl_result,
+function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl : ctl_result,
                            pc: xlenbits) -> xlenbits = {
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
-      let del_priv = exception_delegatee(e.trap, cur_priv);
+      let (del_priv, del_virt) = exception_delegatee(e.trap, cur_privilege, cur_virtualization);
       if   get_config_print_platform()
-      then print_platform("trapping from " ^ to_str(cur_priv) ^ " to " ^ to_str(del_priv)
-                          ^ " to handle " ^ to_str(e.trap));
-      trap_handler(del_priv, false, exceptionType_to_bits(e.trap), pc, e.excinfo, e.ext)
+      then print_platform("trapping from " ^ to_str(cur_priv) ^ " (" ^ to_str(cur_virtualization) ^ ") to "
+                           ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")" ^ " to handle " ^ to_str(e.trap));
+      trap_handler(del_priv, del_virt, false, exceptionType_to_bits(e.trap), pc, e.excinfo, e.ext)
     },
     (_, CTL_MRET())  => {
       let prev_priv   = cur_privilege;
+      let prev_virt   = cur_virtualization;
+
       mstatus->MIE()  = mstatus.MPIE();
       mstatus->MPIE() = 0b1;
+
       cur_privilege   = privLevel_of_bits(mstatus.MPP());
       mstatus->MPP()  = privLevel_to_bits(if haveUsrMode() then User else Machine);
       if   cur_privilege != Machine
       then mstatus->MPRV() = 0b0;
 
+      cur_virtualization = virtMode_of_bits(get_mstatus_MPV(mstatus, mstatush));
+      if sizeof(xlen) == 32
+      then mstatush = set_mstatush_MPV(mstatush, 0b0)
+      else mstatus = set_mstatus_MPV(mstatus, 0b0);
+
       if   get_config_print_reg()
       then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
+      if (sizeof(xlen) == 32) & get_config_print_reg()
+      then print_reg("CSR mstatush <- " ^ BitStr(mstatush.bits()));
       if   get_config_print_platform()
-      then print_platform("ret-ing from " ^ to_str(prev_priv) ^ " to " ^ to_str(cur_privilege));
+      then print_platform("ret-ing from " ^ to_str(prev_priv) ^ " (" ^ to_str(prev_virt) ^ ") to " ^ to_str(cur_privilege) ^ " (" ^ to_str(cur_virtualization) ^ ")");
 
       cancel_reservation();
-      prepare_xret_target(Machine) & pc_alignment_mask()
+      prepare_xret_target(Machine, prev_virt) & pc_alignment_mask()
     },
     (_, CTL_SRET())  => {
       let prev_priv   = cur_privilege;
-      mstatus->SIE()  = mstatus.SPIE();
-      mstatus->SPIE() = 0b1;
-      cur_privilege   = if mstatus.SPP() == 0b1 then Supervisor else User;
-      mstatus->SPP()  = 0b0;
-      if   cur_privilege != Machine
-      then mstatus->MPRV() = 0b0;
+      let prev_virt   = cur_virtualization;
 
-      if   get_config_print_reg()
-      then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
+      match prev_virt {
+        V0 => {
+          mstatus->SIE()  = mstatus.SPIE();
+          mstatus->SPIE() = 0b1;
+
+          cur_privilege   = if mstatus.SPP() == 0b1 then Supervisor else User;
+          mstatus->SPP()  = 0b0;
+          if   cur_privilege != Machine
+          then mstatus->MPRV() = 0b0;
+
+          cur_virtualization = virtMode_of_bits(hstatus.SPV());
+          hstatus->SPV() = 0b0;
+        },
+        V1 => {
+          vsstatus->SIE()  = vsstatus.SPIE();
+          vsstatus->SPIE() = 0b1;
+
+          cur_privilege    = if vsstatus.SPP() == 0b1 then Supervisor else User;
+          vsstatus->SPP()  = 0b0;
+          if   cur_privilege != Machine
+          then mstatus->MPRV() = 0b0;
+
+          cur_virtualization = V1;
+        }
+      };
+      if get_config_print_reg() then {
+        print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
+        print_reg("CSR hstatus <- " ^ BitStr(hstatus.bits()));
+      };
       if   get_config_print_platform()
-      then print_platform("ret-ing from " ^ to_str(prev_priv)
-                          ^ " to " ^ to_str(cur_privilege));
+      then print_platform("ret-ing from " ^ to_str(prev_priv) ^" (" ^ to_str(prev_virt) ^ ") to "
+                            ^ to_str(cur_privilege) ^ " (" ^ to_str(cur_virtualization) ^ ")");
 
       cancel_reservation();
-      prepare_xret_target(Supervisor) & pc_alignment_mask()
+      prepare_xret_target(Supervisor, prev_virt) & pc_alignment_mask()
     },
     (_, CTL_URET())  => {
       let prev_priv   = cur_privilege;
+      let prev_virt   = cur_virtualization;
       mstatus->UIE()  = mstatus.UPIE();
       mstatus->UPIE() = 0b1;
       cur_privilege   = User;
@@ -520,10 +641,11 @@ function exception_handler(cur_priv : Privilege, ctl : ctl_result,
       if   get_config_print_reg()
       then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
       if   get_config_print_platform()
-      then print_platform("ret-ing from " ^ to_str(prev_priv) ^ " to " ^ to_str(cur_privilege));
+      then print_platform("ret-ing from " ^ to_str(prev_priv) ^" (" ^ to_str(prev_virt) ^ ") to "
+                            ^ to_str(cur_privilege) ^ " (" ^ to_str(cur_virtualization) ^ ")");
 
       cancel_reservation();
-      prepare_xret_target(User) & pc_alignment_mask()
+      prepare_xret_target(User, prev_virt) & pc_alignment_mask()
     }
   }
 }
@@ -532,18 +654,18 @@ function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
   let t : sync_exception = struct { trap    = e,
                                     excinfo = Some(addr),
                                     ext     = None() } in
-  set_next_pc(exception_handler(cur_privilege, CTL_TRAP(t), PC))
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
 }
 
 function handle_exception(e: ExceptionType) -> unit = {
   let t : sync_exception = struct { trap    = e,
                                     excinfo = None(),
                                     ext     = None() } in
-  set_next_pc(exception_handler(cur_privilege, CTL_TRAP(t), PC))
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
 }
 
-function handle_interrupt(i : InterruptType, del_priv : Privilege) -> unit =
-  set_next_pc(trap_handler(del_priv, true, interruptType_to_bits(i), PC, None(), None()))
+function handle_interrupt(i : InterruptType, del_priv : Privilege, del_virt: Virtualization) -> unit =
+  set_next_pc(trap_handler(del_priv, del_virt, true, interruptType_to_bits(i), PC, None(), None()))
 
 /* state state initialization */
 
@@ -559,15 +681,18 @@ function init_sys() -> unit = {
   misa->M()   = 0b1;                            /* integer multiply/divide */
   misa->U()   = 0b1;                            /* user-mode */
   misa->S()   = 0b1;                            /* supervisor-mode */
-
-  if   sys_enable_fdext() & sys_enable_zfinx()
-  then internal_error(__FILE__, __LINE__, "F and Zfinx cannot both be enabled!");
-
+  misa->H()   = bool_to_bits(sys_enable_hext());/* hypervisor extension */
   /* We currently support both F and D */
   misa->F()   = bool_to_bits(sys_enable_fdext());      /* single-precision */
   misa->D()   = if   sizeof(flen) >= 64
                 then bool_to_bits(sys_enable_fdext())  /* double-precision */
                 else 0b0;
+
+  if   sys_enable_fdext() & sys_enable_zfinx()
+  then internal_error(__FILE__, __LINE__, "F and Zfinx cannot both be enabled!");
+
+  if   sys_enable_next() & sys_enable_hext()
+  then internal_error(__FILE__, __LINE__, "The hypervisor currently does not consider the possibility of user-mode interrupts");
 
   mstatus = set_mstatus_SXL(mstatus, misa.MXL());
   mstatus = set_mstatus_UXL(mstatus, misa.MXL());
@@ -598,6 +723,8 @@ function init_sys() -> unit = {
   minstret_increment = true;
 
   init_pmp();
+  if(sys_enable_hext())
+  then init_hext();
 
   // log compatibility with spike
   if   get_config_print_reg()

@@ -769,14 +769,15 @@ mapping clause encdec = ECALL()
 
 function clause execute ECALL() = {
   let t : sync_exception =
-    struct { trap = match (cur_privilege) {
-                      User       => E_U_EnvCall(),
-                      Supervisor => E_S_EnvCall(),
-                      Machine    => E_M_EnvCall()
+    struct { trap = match (cur_privilege, cur_virtualization) {
+                      (User, _)        => E_U_EnvCall(),
+                      (Supervisor, V0) => E_S_EnvCall(),
+                      (Supervisor, V1) => E_VS_EnvCall(),
+                      (Machine,_)      => E_M_EnvCall()
                     },
              excinfo = (None() : option(xlenbits)),
              ext     = None() };
-  set_next_pc(exception_handler(cur_privilege, CTL_TRAP(t), PC));
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC));
   RETIRE_FAIL
 }
 
@@ -794,7 +795,7 @@ function clause execute MRET() = {
   else if not(ext_check_xret_priv (Machine))
   then { ext_fail_xret_priv(); RETIRE_FAIL }
   else {
-    set_next_pc(exception_handler(cur_privilege, CTL_MRET(), PC));
+    set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_MRET(), PC));
     RETIRE_SUCCESS
   }
 }
@@ -818,7 +819,7 @@ function clause execute SRET() = {
   else if not(ext_check_xret_priv (Supervisor))
   then { ext_fail_xret_priv(); RETIRE_FAIL }
   else {
-    set_next_pc(exception_handler(cur_privilege, CTL_SRET(), PC));
+    set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_SRET(), PC));
     RETIRE_SUCCESS
   }
 }
