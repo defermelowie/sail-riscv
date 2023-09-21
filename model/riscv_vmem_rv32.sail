@@ -71,22 +71,19 @@
 /* RV32 Supervisor-mode address translation and page-table walks. */
 
 /* Define the architectural satp and its legalizer. */
-
-register satp : xlenbits
-
 function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits =
   legalize_satp32(a, o, v)
 
 /* Compute the address translation mode. */
 
-val translationMode : (Privilege) -> SATPMode
-function translationMode(priv) = {
+val translationMode : (Privilege, Virtualization) -> SATPMode
+function translationMode(priv, virt) = {
   if priv == Machine then Sbare
   else {
     let arch = architecture(get_mstatus_SXL(mstatus));
     match arch {
       Some(RV32) => {
-        let s = Mk_Satp32(satp[31..0]);
+        let s = Mk_Satp32(xatp(virt)[31..0]);
         if s.Mode() == 0b0 then Sbare else Sv32
       },
       _    => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
@@ -96,14 +93,14 @@ function translationMode(priv) = {
 
 /* Top-level address translation dispatcher */
 
-val translateAddr_priv : (xlenbits, AccessType(ext_access_type), Privilege) -> TR_Result(xlenbits, ExceptionType)
-function translateAddr_priv(vAddr, ac, effPriv) = {
+val translateAddr_priv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+function translateAddr_priv(vAddr, ac, effPriv, effVirt) = {
   let mxr    : bool   = mstatus.MXR() == 0b1;
   let do_sum : bool   = mstatus.SUM() == 0b1;
-  let mode : SATPMode = translationMode(effPriv);
+  let mode : SATPMode = translationMode(effPriv, effVirt);
 
-  let asid = curAsid32(satp);
-  let ptb  = curPTB32(satp);
+  let asid = curAsid32(xatp(effVirt));
+  let ptb  = curPTB32(xatp(effVirt));
 
   /* PTW extensions: initialize the PTW extension state */
   let ext_ptw : ext_ptw = init_ext_ptw;
@@ -120,7 +117,7 @@ function translateAddr_priv(vAddr, ac, effPriv) = {
 
 val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr(vAddr, ac) =
-  translateAddr_priv(vAddr, ac, effectivePrivilege(ac, mstatus, cur_privilege))
+  translateAddr_priv(vAddr, ac, effectivePrivilege(ac, mstatus, cur_privilege), cur_virtualization)
 
 val flush_TLB : (option(xlenbits), option(xlenbits)) -> unit
 function flush_TLB(asid_xlen, addr_xlen) -> unit = {

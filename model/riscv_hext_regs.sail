@@ -253,4 +253,10 @@ function get_vstval() -> xlenbits = {
 /* TODO: Virtual Supervisor interrupt pending                       */
 
 /* **************************************************************** */
-/* TODO: Virtual Supervisor address translation & Protection        */
+/* Virtual Supervisor address translation & Protection              */
+
+register vsatp : xlenbits
+
+function get_vsatp() -> xlenbits = {
+  vsatp
+}
