@@ -113,7 +113,7 @@ function clause ext_read_CSR(0x602) = Some(get_hedeleg()) /* hedeleg */
 // function clause ext_read_CSR(0xE12) = Some() /* hgeip */
 // function clause ext_read_CSR(0x60A) = Some() /* henvcfg */
 // function clause ext_read_CSR(0x61A) = Some() /* henvcfgh */
-// function clause ext_read_CSR(0x680) = Some() /* hgatp */
+// function clause ext_read_CSR(0x680) = Some(get_hgatp()) /* hgatp */
 // function clause ext_read_CSR(0x605) = Some() /* htimedelta */
 // function clause ext_read_CSR(0x615) = Some() /* htimedeltah */
 /* TODO: VS* CSR read access checks */
@@ -130,6 +130,7 @@ function clause ext_read_CSR(0x280) = Some(get_vsatp()) /* vsatp */
 /* H-ext CSR write handles */
 function clause ext_write_CSR(0x600, value) = { hstatus = legalize_hstatus(hstatus, value); Some(get_hstatus()) }
 function clause ext_write_CSR(0x602, value) = { hedeleg = legalize_hedeleg(hedeleg, value); Some(get_hedeleg()) }
+// function clause ext_write_CSR(0x680, value) = { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(get_hgatp()) }
 function clause ext_write_CSR(0x200, value) = { vsstatus = legalize_vsstatus(vsstatus, value); Some(get_vsstatus()) }
 function clause ext_write_CSR(0x205, value) = { Some(set_trap_vector(Supervisor, V1, value)) }
 function clause ext_write_CSR(0x240, value) = { vsscratch = value; Some(get_vsscratch()) }

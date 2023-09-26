@@ -74,6 +74,10 @@
 function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits =
   legalize_satp64(a, o, v)
 
+/* Define hgatp its legalizer */
+function legalize_hgatp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits =
+  legalize_hgatp64(a, o, v)
+
 /* Define valid source addresses for translation */
 
 function isValidSv39Addr(vAddr : xlenbits) -> bool = {

@@ -162,6 +162,41 @@ function legalize_hedeleg(o: Medeleg, v: xlenbits) -> Medeleg = {
 /* TODO: Hypervisor Guest External Interrupt-Enable                 */
 
 /* **************************************************************** */
+/* Hypervisor Guest Address Translation and Protection              */
+
+register hgatp : xlenbits
+
+function get_hgatp() -> xlenbits =
+  hgatp
+
+bitfield Hgatp64 : bits(64) = {
+  Mode : 63 .. 60,
+  Vmid : 57 .. 44,
+  PPN  : 43 .. 0
+}
+
+function legalize_hgatp64(a : Architecture, o : bits(64), v : bits(64)) -> bits(64) = {
+  let h = Mk_Hgatp64(v[63 .. 60] @ 0b00 @ v[57 .. 44] @ v[43 .. 0]);
+  match hgatp64Mode_of_bits(a, h.Mode()) {
+    None()       => o,
+    Some(Sv32x4) => o,  /* Sv32x4 is unsupported for now */
+    Some(_)      => h.bits()
+  }
+}
+
+bitfield Hgatp32 : bits(32) = {
+  Mode : 31,
+  Vmid : 28 .. 22,
+  PPN  : 21 .. 0
+}
+
+function legalize_hgatp32(a : Architecture, o : bits(32), v : bits(32)) -> bits(32) = {
+  let h = Mk_Hgatp32(v[31 .. 31] @ 0b00 @ v[28 .. 22] @ v[21 .. 0]);
+  /* all 32-bit hgatp modes are valid */
+  h.bits()
+}
+
+/* **************************************************************** */
 /* Virtual Supervisor Status Register                               */
 
 bitfield Vsstatus : xlenbits = {

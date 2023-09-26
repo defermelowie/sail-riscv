@@ -74,6 +74,10 @@
 function legalize_satp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits =
   legalize_satp32(a, o, v)
 
+/* Define hgatp its legalizer */
+function legalize_hgatp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbits =
+  legalize_hgatp32(a, o, v)
+
 /* Compute the address translation mode. */
 
 val translationMode : (Privilege, Virtualization) -> SATPMode

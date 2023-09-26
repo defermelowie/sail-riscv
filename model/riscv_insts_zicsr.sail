@@ -138,6 +138,10 @@ function readCSR csr : csreg -> xlenbits = {
     /* trigger/debug */
     (0x7a0,  _) => ~(tselect),  /* this indicates we don't have any trigger support */
 
+    /* hypervisor extendended supervisor mode */
+    /* TODO: move h-ext CSR reads here in order to not use `ext*` types and hooks (see CODE_STYLE.md) */
+    (0x680, _) => get_hgatp(),
+
     /* supervisor mode */
     (0x100,  _) => if cur_virtualization == V1 then get_vsstatus() else lower_mstatus(mstatus).bits(),
     (0x102,  _) => sedeleg.bits(),
@@ -225,6 +229,10 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
 
     /* trigger/debug */
     (0x7a0,  _) => { tselect = value; Some(tselect) },
+
+    /* hypervisor extendended supervisor mode */
+    /* TODO: move h-ext CSR writes here in order to not use `ext*` types and hooks (see CODE_STYLE.md) */
+    (0x680, _) => { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(get_hgatp()) },
 
     /* supervisor mode */
     (0x100,  _) => match cur_virtualization {

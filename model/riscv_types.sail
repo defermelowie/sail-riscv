@@ -407,6 +407,20 @@ function satp64Mode_of_bits(a : Architecture, m : satp_mode) -> option(SATPMode)
     (_, _)      => None()
   }
 
+/* hypervisor-level address translation modes */
+type hgatp_mode = bits(4)
+enum HGATPMode = {Bare, Sv32x4, Sv39x4, Sv48x4, Sv57x4}
+
+function hgatp64Mode_of_bits(a : Architecture, m : hgatp_mode) -> option(HGATPMode) =
+  match (a, m) {
+    (_,    0x0) => Some(Bare),
+    (RV32, 0x1) => Some(Sv32x4),
+    (RV64, 0x8) => Some(Sv39x4),
+    (RV64, 0x9) => Some(Sv48x4),
+    (RV64, 0xa) => Some(Sv57x4),
+    (_, _)      => None()
+  }
+
 /* CSR access control bits (from CSR addresses) */
 
 type csrRW = bits(2)  /* read/write */
