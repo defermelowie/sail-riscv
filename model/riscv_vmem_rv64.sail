@@ -92,11 +92,11 @@ function isValidSv48Addr(vAddr : xlenbits) -> bool = {
                       else zeros())
 }
 
-/* Compute the address translation mode. */
+/* Get the (V)S-stage address translation mode from (v)satp */
 
-val translationMode : (Privilege, Virtualization) -> SATPMode
+val translationMode : (Privilege, Virtualization) -> AddressTranslationMode
 function translationMode(priv, virt) = {
-  if priv == Machine then Sbare
+  if priv == Machine then Bare
   else {
     let arch = architecture(get_mstatus_SXL(mstatus));
     match arch {
@@ -104,14 +104,31 @@ function translationMode(priv, virt) = {
         let mbits : satp_mode = Mk_Satp64(xatp(virt)).Mode();
         match satp64Mode_of_bits(RV64, mbits) {
           Some(m) => m,
-          None()  => internal_error(__FILE__, __LINE__, "invalid RV64 translation mode in satp")
+          None()  => internal_error(__FILE__, __LINE__, "invalid RV64 (V)S-stage translation mode")
         }
       },
       Some(RV32) => {
         let s = Mk_Satp32(xatp(virt)[31..0]);
-        if s.Mode() == 0b0 then Sbare else Sv32
+        if s.Mode() == 0b0 then Bare else Sv32
       },
       _    => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
+    }
+  }
+}
+
+/* Get the G-stage address translation mode from hgatp */
+
+val gStageTranslationMode : (Privilege, Virtualization) -> AddressTranslationMode
+function gStageTranslationMode(priv, virt) = {
+  match (virt, priv) {
+    (V0, _)       => Bare,
+    (V1, Machine) => Bare,
+    (V1, _)       => {
+      let h = Mk_Hgatp64(hgatp);
+      match hgatpMode_of_bits(RV64, h.Mode()) {
+        Some(m) => m,
+        None()  => internal_error(__FILE__, __LINE__, "invalid RV64 G-stage translation mode")
+      }
     }
   }
 }
@@ -120,39 +137,70 @@ function translationMode(priv, virt) = {
 
 val translateAddr_priv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr_priv(vAddr, ac, effPriv, effVirt) = {
-  let mxr    : bool   = mstatus.MXR() == 0b1;
-  let do_sum : bool   = mstatus.SUM() == 0b1;
-  let mode : SATPMode = translationMode(effPriv, effVirt);
-
+  let s_mode : AddressTranslationMode = translationMode(effPriv, effVirt);
   let asid = curAsid64(xatp(effVirt));
   let ptb  = curPTB64(xatp(effVirt));
+
+  let s_mxr : bool = if (effVirt == V0) then mstatus.MXR() == 0b1 else vsstatus.MXR() == 0b1;
+  let s_sum : bool = if (effVirt == V0) then mstatus.SUM() == 0b1 else vsstatus.SUM() == 0b1;
+
+  let g_mode : AddressTranslationMode = gStageTranslationMode(effPriv, effVirt);
+  let vmid = Mk_Hgatp64(hgatp).Vmid();
+  let g_pt_base : paddr64 = shiftl(zero_extend(Mk_Hgatp64(hgatp).PPN()), PAGESIZE_BITS);
+
+  let g_mxr : bool = mstatus.MXR() == 0b1;
+  let g_sum : bool = mstatus.SUM() == 0b1;
 
   /* PTW extensions: initialize the PTW extension state. */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
-  match mode {
-    Sbare => TR_Address(vAddr, ext_ptw),
+/* (V)S-level address translation */
+  let gpAddr : TR_Result(xlenbits, ExceptionType) = match s_mode {
+    Bare => TR_Address(vAddr, ext_ptw),
     Sv39  => { if   isValidSv39Addr(vAddr)
-               then match translate39(asid, ptb, vAddr[38 .. 0], ac, effPriv, mxr, do_sum, SV39_LEVELS - 1, ext_ptw) {
+               then match translate39(asid, ptb, vAddr[38 .. 0], ac, effPriv, s_mxr, s_sum, SV39_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
                       TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw)
                     }
                else TR_Failure(translationException(ac, PTW_Invalid_Addr()), ext_ptw)
              },
     Sv48  => { if   isValidSv48Addr(vAddr)
-               then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, mxr, do_sum, SV48_LEVELS - 1, ext_ptw) {
+               then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, s_mxr, s_sum, SV48_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
                       TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw)
                     }
                else TR_Failure(translationException(ac, PTW_Invalid_Addr()), ext_ptw)
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
-  }
+  };
+
+  /* Early return in case of AT_Failure */
+  let gpAddr : xlenbits = match gpAddr {
+    TR_Address(gpa, ext_ptw) => gpa,
+    TR_Failure(f, ext_ptw)   => {return gpAddr}
+  };
+
+  /* G-level address translation */
+  let spAddr : TR_Result(xlenbits, ExceptionType) = match g_mode {
+      Bare   => TR_Address(gpAddr, ext_ptw),
+      Sv39x4 => { if isValidSv39x4Addr(gpAddr)
+                  then match translate39x4(vmid, g_pt_base, gpAddr[40 .. 0], ac, g_mxr, g_sum, ext_ptw) {
+                        TR_Address(spa, ext_ptw) => TR_Address(zero_extend(spa), ext_ptw),
+                        TR_Failure(f, ext_ptw)   => TR_Failure(translationException(ac, f), ext_ptw)
+                      }
+                  else TR_Failure(E_Fetch_GPage_Fault(), ext_ptw) /* FIXME: access type is not checked */
+                },
+      Sv48x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv48x4)"), /* TODO: Sv48x4 */
+      Sv57x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv57x4)"), /* TODO: Sv57x4 */
+      _      => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
+  };
+
+  spAddr
 }
 
 val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr(vAddr, ac) =
-  translateAddr_priv(vAddr, ac, effectivePrivilege(ac, mstatus, cur_privilege), cur_virtualization)
+  translateAddr_priv(vAddr, ac, effectivePrivilege(ac, mstatus, cur_privilege), cur_virtualization) /* TODO: use effective V instead of current */
 
 val flush_TLB : (option(xlenbits), option(xlenbits)) -> unit
 function flush_TLB(asid_xlen, addr_xlen) -> unit = {

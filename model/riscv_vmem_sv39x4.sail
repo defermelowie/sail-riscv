@@ -68,179 +68,87 @@
 /*  SUCH DAMAGE.                                                                         */
 /*=======================================================================================*/
 
-/* Shared definitions for supervisor-mode page-table-entries and permission checks.
- *
- * These definitions are independent of xlen and do not involve
- * accessing physical memory.
- */
+/* Sv39x4 constants */
+let SV39x4_LEVELS     = 3
+let SV39x4_LEVEL_BITS = 9
+let PTE39x4_SIZE      = 8
+let PTE39x4_LOG_SIZE  = 3
 
-/* PageSize */
+/* Sv39x4 types */
+type vmid39x4  = vmid64
+type pte39x4   = pte64
+type paddr39x4 = paddr64
+type vaddr39x4 = bits(41)
 
-let PAGESIZE_BITS = 12
-
-/*
- * Definitions for RV32, which has a single address translation mode: Sv32.
- */
-
-type vaddr32 = bits(32)
-type paddr32 = bits(34)
-type pte32   = bits(32)
-
-/* asid */
-type asid32 = bits(9)
-
-function curAsid32(s : bits(32)) -> asid32 = {
-  let s = Mk_Satp32(s);
-  s.Asid()
-}
-
-/* page table base from satp */
-function curPTB32(s : bits(32)) -> paddr32 = {
-  let s : Satp32 = Mk_Satp32(s);
-  shiftl(zero_extend(s.PPN()), PAGESIZE_BITS)
-}
-
-/* Sv32 parameters and bitfield layouts */
-
-let SV32_LEVEL_BITS = 10
-let SV32_LEVELS     = 2
-let PTE32_LOG_SIZE  = 2
-let PTE32_SIZE      = 4
-
-bitfield SV32_Vaddr : vaddr32 = {
-  VPNi  : 31 .. 12,
+/* Sv39x4 bitfield layouts */
+bitfield Sv39x4_VAddr : vaddr39x4 = {
+  VPNi  : 40 .. 12,
   PgOfs : 11 .. 0
 }
 
-bitfield SV32_Paddr : paddr32 = {
-  PPNi  : 33 .. 12,
-  PgOfs : 11 .. 0
+/* Check if upper bits are '0' */
+function isValidSv39x4Addr(vAddr: xlenbits) -> bool = {
+  vAddr[63 .. 41] == zeros()
 }
 
-bitfield SV32_PTE : pte32 = {
-  PPNi  : 31 .. 10,
-  RSW   : 9  .. 8,
-  BITS  : 7  .. 0
-}
+/* Sv39x4 page walk */
+val walk39x4 : (xlenbits, vaddr39x4, AccessType(ext_access_type), bool, bool, nat, ext_ptw) -> PTW_Result(paddr39x4, SV39_PTE)
+function walk39x4(ptb, gpa, ac, mxr, sum, level, ext_ptw) = {
+  // print_platform("[WARNING] Sv39x4 page walk is not yet fully implemented");
+  /* Construct pte address */
+  let va = Mk_Sv39x4_VAddr(gpa);
+  let pt_ofs = PtOfs_from_VPNi(level, zero_extend(va.VPNi()), Sv39x4);
+  let pte_addr = (ptb + pt_ofs)[55 .. 0];
+  /* Read pte */
+  match (mem_read_priv(Read(Data), Supervisor, zero_extend(pte_addr), 8, false, false, false)) {
+    MemException(_) => PTW_Failure(PTW_Access(), ext_ptw),
+    MemValue(v) => {
+      // print("walk39x4(gpa=" ^ BitStr(gpa) ^ " level=" ^ string_of_int(level)
+      //   ^ " pt_base=" ^ BitStr(ptb)
+      //   ^ " pt_ofs=" ^ BitStr(pt_ofs)
+      //   ^ " pte_addr=" ^ BitStr(pte_addr)
+      //   ^ " pte=" ^ BitStr(v) ^ ")");
+      let pte = Mk_SV39_PTE(v);
+      let ext_pte = pte.Ext();
+      let pattr = Mk_PTE_Bits(pte.BITS());
 
-/*
- * Definitions for RV64, which has two defined address translation modes: Sv39 and Sv48.
- */
-
-/* Sv48 and Sv64 are reserved but not defined.  The size of the VPN
- * increases by 9 bits through Sv39, Sv48 and Sv57, but not for Sv64.
- * Also, the 45-bit size of the VPN for Sv57 exceeds the 44-bit size
- * of the PPN in satp64.  Due to these corner cases, it is unlikely
- * that definitions can be shared across all four schemes, so separate
- * definitions might eventually be needed for each translation mode.
- *
- * But to keep things simple for now, since Sv39 and Sv48 have the
- * same PPN size, we share some definitions.
- */
-
-type paddr64 = bits(56)
-type pte64   = bits(64)
-
-/* asid */
-
-type asid64 = bits(16)
-type vmid64 = bits(14)
-
-function curAsid64(s : bits(64)) -> asid64 = {
-  let s = Mk_Satp64(s);
-  s.Asid()
-}
-
-/* page table base from satp */
-function curPTB64(s : bits(64)) -> paddr64 = {
-  let s = Mk_Satp64(s);
-  shiftl(zero_extend(s.PPN()), PAGESIZE_BITS)
-}
-
-/* Sv39 parameters and bitfield layouts */
-
-let SV39_LEVEL_BITS = 9
-let SV39_LEVELS     = 3
-let PTE39_LOG_SIZE  = 3
-let PTE39_SIZE      = 8
-
-type vaddr39 = bits(39)
-
-bitfield SV39_Vaddr : vaddr39 = {
-  VPNi  : 38 .. 12,
-  PgOfs : 11 .. 0
-}
-
-bitfield SV39_Paddr : paddr64 = {
-  PPNi  : 55 .. 12,
-  PgOfs : 11 .. 0
-}
-
-bitfield SV39_PTE : pte64 = {
-  Ext   : 63 .. 54,
-  PPNi  : 53 .. 10,
-  RSW   : 9  .. 8,
-  BITS  : 7  .. 0
-}
-
-/* Sv48 parameters and bitfield layouts */
-
-let SV48_LEVEL_BITS = 9
-let SV48_LEVELS     = 4
-let PTE48_LOG_SIZE  = 3
-let PTE48_SIZE      = 8
-
-type vaddr48 = bits(48)
-type pte48   = bits(64)
-
-bitfield SV48_Vaddr : vaddr48 = {
-  VPNi  : 47 .. 12,
-  PgOfs : 11 .. 0
-}
-
-bitfield SV48_Paddr : paddr64 = {
-  PPNi  : 55 .. 12,
-  PgOfs : 11 .. 0
-}
-
-bitfield SV48_PTE : pte48 = {
-  Ext   : 63 .. 54,
-  PPNi  : 53 .. 10,
-  RSW   : 9  .. 8,
-  BITS  : 7  .. 0
-}
-
-/* Get level i page table offset from virtual page number (VPN)
- *
- * NOTE: should perhaps have vpn param use variable ammount of bits based on Address Translation Mode?
- */
-function PtOfs_from_VPNi(i: nat, vpn: xlenbits, atm: AddressTranslationMode) -> xlenbits =
-  match (atm, i) {
-    (Bare, _)   => internal_error(__FILE__, __LINE__, "Bare does not make use of VPN"),
-    (Sv32, _)   => shiftl(zero_extend(shiftr(vpn, i * 10)[9 .. 0]), 2),
-    (Sv32x4, 1) => shiftl(zero_extend(shiftr(vpn, i * 10)[11 .. 0]), 2),
-    (Sv32x4, _) => shiftl(zero_extend(shiftr(vpn, i * 10)[9 .. 0]), 2),
-    (Sv39x4, 2) => shiftl(zero_extend(shiftr(vpn, i * 10)[10 .. 0]), 3),
-    (Sv48x4, 3) => shiftl(zero_extend(shiftr(vpn, i * 10)[10 .. 0]), 3),
-    (Sv57x4, 4) => shiftl(zero_extend(shiftr(vpn, i * 10)[10 .. 0]), 3),
-    (_, _)      => shiftl(zero_extend(shiftr(vpn, i * 9)[8 .. 0]), 3)
+      if isInvalidPTE(pattr.bits(), ext_pte) then PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
+      else if isPTEPtr(pattr.bits(), ext_pte) then { /* page table pointer */
+        if level > 0 then {
+          let ptb_next : xlenbits = shiftl(zero_extend(pte.PPNi()), PAGESIZE_BITS);
+          let level_next = level - 1;
+          walk39x4(ptb_next, gpa, ac, mxr, sum, level_next, ext_ptw)
+        } else PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
+      /* check access permissions */
+      } else match checkPTEPermission(ac, User, mxr, sum, pattr, ext_pte, ext_ptw) {
+        PTE_Check_Failure(ext_ptw, ext_ptw_fail) => PTW_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw),
+        PTE_Check_Success(ext_ptw)  => {
+          // if level > 0 then { /* page table leaf -> superpage */
+          //   let mask = shiftl(0b1, level * SV39x4_LEVEL_BITS) - 1;
+          //   if (pte.PPNi() & mask) != zero_extend(0b0) then PTW_Failure(PTW_Misaligned(), ext_ptw) /* misaligned superpage */
+          //   else {
+          //     let p_addr = append((pte.PPNi | zero_extend(va.VPNi()) & mask), va.PgOfs());
+          //     PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)
+          //   }
+          // } else {  /* page table leaf -> normal page */
+            let p_addr = append(pte.PPNi(), va.PgOfs());
+            PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)
+          // }
+        }
+      }
+    }
   }
-
-/* The types below are parameterized by 'paddr and 'pte to support
- * various architectural widths (e.g. RV32, RV64).  ext_ptw supports
- * extensions to the default address translation and page-table-walk.
- */
-
-/* Result of a page-table walk.  */
-
-union PTW_Result('paddr : Type, 'pte : Type) = {
-  PTW_Success: ('paddr, 'pte, 'paddr, nat, bool, ext_ptw),
-  PTW_Failure: (PTW_Error, ext_ptw)
 }
 
-/* Result of address translation */
-
-union TR_Result('paddr : Type, 'failure : Type) = {
-  TR_Address : ('paddr, ext_ptw),
-  TR_Failure : ('failure, ext_ptw)
+/* Translate Sv39x4 guest virtual address to supervisor physical address
+ *
+ * NOTE: vmid is not used but is required for implementing TLBs in the future
+ */
+val translate39x4 : (vmid39x4, paddr39x4, vaddr39x4, AccessType(ext_access_type), bool, bool, ext_ptw) -> TR_Result(paddr39x4, PTW_Error)
+function translate39x4(vmid, ptb, gpa, ac, mxr, sum, ext_ptw) = {
+  match walk39x4(zero_extend(ptb), gpa, ac, mxr, sum, SV39x4_LEVELS - 1, ext_ptw) {
+    PTW_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
+    PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => TR_Address(pAddr, ext_ptw)
+    /* TODO: update A,D bits */
+  }
 }

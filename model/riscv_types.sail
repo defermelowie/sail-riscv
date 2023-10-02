@@ -393,25 +393,23 @@ function extStatus_of_bits(e) =
     0b11 => Dirty
   }
 
-/* supervisor-level address translation modes */
+/* address translation modes */
+enum AddressTranslationMode = {Bare, Sv32, Sv39, Sv48, Sv57, Sv32x4, Sv39x4, Sv48x4, Sv57x4}
 
 type satp_mode = bits(4)
-enum SATPMode = {Sbare, Sv32, Sv39, Sv48}
+type hgatp_mode = bits(4)
 
-function satp64Mode_of_bits(a : Architecture, m : satp_mode) -> option(SATPMode) =
+function satp64Mode_of_bits(a : Architecture, m : satp_mode) -> option(AddressTranslationMode) =
   match (a, m) {
-    (_,    0x0) => Some(Sbare),
+    (_,    0x0) => Some(Bare),
     (RV32, 0x1) => Some(Sv32),
     (RV64, 0x8) => Some(Sv39),
     (RV64, 0x9) => Some(Sv48),
+    (RV64, 0xa) => Some(Sv57),
     (_, _)      => None()
   }
 
-/* hypervisor-level address translation modes */
-type hgatp_mode = bits(4)
-enum HGATPMode = {Bare, Sv32x4, Sv39x4, Sv48x4, Sv57x4}
-
-function hgatp64Mode_of_bits(a : Architecture, m : hgatp_mode) -> option(HGATPMode) =
+function hgatpMode_of_bits(a : Architecture, m : hgatp_mode) -> option(AddressTranslationMode) =
   match (a, m) {
     (_,    0x0) => Some(Bare),
     (RV32, 0x1) => Some(Sv32x4),
@@ -420,6 +418,8 @@ function hgatp64Mode_of_bits(a : Architecture, m : hgatp_mode) -> option(HGATPMo
     (RV64, 0xa) => Some(Sv57x4),
     (_, _)      => None()
   }
+
+
 
 /* CSR access control bits (from CSR addresses) */
 

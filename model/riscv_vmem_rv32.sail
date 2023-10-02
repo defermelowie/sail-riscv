@@ -82,13 +82,13 @@ function legalize_hgatp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbit
 
 val translationMode : (Privilege, Virtualization) -> SATPMode
 function translationMode(priv, virt) = {
-  if priv == Machine then Sbare
+  if priv == Machine then Bare
   else {
     let arch = architecture(get_mstatus_SXL(mstatus));
     match arch {
       Some(RV32) => {
         let s = Mk_Satp32(xatp(virt)[31..0]);
-        if s.Mode() == 0b0 then Sbare else Sv32
+        if s.Mode() == 0b0 then Bare else Sv32
       },
       _    => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
     }
@@ -110,7 +110,7 @@ function translateAddr_priv(vAddr, ac, effPriv, effVirt) = {
   let ext_ptw : ext_ptw = init_ext_ptw;
 
   match mode {
-    Sbare => TR_Address(vAddr, ext_ptw),
+    Bare => TR_Address(vAddr, ext_ptw),
     Sv32  => match translate32(asid, ptb, vAddr, ac, effPriv, mxr, do_sum, SV32_LEVELS - 1, ext_ptw) {
                TR_Address(pa, ext_ptw) => TR_Address(to_phys_addr(pa), ext_ptw),
                TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw)
