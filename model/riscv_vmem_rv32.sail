@@ -80,7 +80,7 @@ function legalize_hgatp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbit
 
 /* Compute the address translation mode. */
 
-val translationMode : (Privilege, Virtualization) -> SATPMode
+val translationMode : (Privilege, Virtualization) -> AddressTranslationMode
 function translationMode(priv, virt) = {
   if priv == Machine then Bare
   else {
@@ -101,7 +101,7 @@ val translateAddr_priv : (xlenbits, AccessType(ext_access_type), Privilege, Virt
 function translateAddr_priv(vAddr, ac, effPriv, effVirt) = {
   let mxr    : bool   = mstatus.MXR() == 0b1;
   let do_sum : bool   = mstatus.SUM() == 0b1;
-  let mode : SATPMode = translationMode(effPriv, effVirt);
+  let mode : AddressTranslationMode = translationMode(effPriv, effVirt);
 
   let asid = curAsid32(xatp(effVirt));
   let ptb  = curPTB32(xatp(effVirt));
