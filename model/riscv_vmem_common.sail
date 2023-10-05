@@ -244,3 +244,7 @@ union TR_Result('paddr : Type, 'failure : Type) = {
   TR_Address : ('paddr, ext_ptw),
   TR_Failure : ('failure, ext_ptw)
 }
+
+/* High level address translation */
+val sStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+val gStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
