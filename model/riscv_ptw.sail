@@ -146,4 +146,3 @@ function translationException(a : AccessType(ext_access_type), f : PTW_Error, s:
     VS => sStageTranslationException(a, f),
     G => gStageTranslationException(a, f)
   }
-
