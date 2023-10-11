@@ -138,7 +138,7 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   let mode : AddressTranslationMode = sStageTranslationMode(effPriv, effVirt);
   let asid = curAsid64(xatp(effVirt));
   let ptb  = curPTB64(xatp(effVirt));
-  let mxr : bool = if (effVirt == V0) then mstatus.MXR() == 0b1 else vsstatus.MXR() == 0b1;
+  let mxr : bool = if (effVirt == V0) then mstatus.MXR() == 0b1 else (vsstatus.MXR() == 0b1 | mstatus.MXR() == 0b1);
   let sum : bool = if (effVirt == V0) then mstatus.SUM() == 0b1 else vsstatus.SUM() == 0b1;
 
   /* PTW extensions: initialize the PTW extension state. */
@@ -150,16 +150,16 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
     Sv39  => { if   isValidSv39Addr(vAddr)
                then match translate39(asid, ptb, vAddr[38 .. 0], ac, effPriv, effVirt, mxr, sum, SV39_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw)
+                      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f, S), ext_ptw)
                     }
-               else TR_Failure(translationException(ac, PTW_Invalid_Addr()), ext_ptw)
+               else TR_Failure(translationException(ac, PTW_Invalid_Addr(), S), ext_ptw)
              },
     Sv48  => { if   isValidSv48Addr(vAddr)
                then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw)
+                      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f, S), ext_ptw)
                     }
-               else TR_Failure(translationException(ac, PTW_Invalid_Addr()), ext_ptw)
+               else TR_Failure(translationException(ac, PTW_Invalid_Addr(), S), ext_ptw)
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
@@ -183,9 +183,9 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
       Sv39x4 => { if isValidSv39x4Addr(vAddr)
                   then match translate39x4(vmid, ptb, vAddr[40 .. 0], ac, mxr, sum, ext_ptw) {
                         TR_Address(spa, ext_ptw) => TR_Address(zero_extend(spa), ext_ptw),
-                        TR_Failure(f, ext_ptw)   => TR_Failure(translationException(ac, f), ext_ptw)
+                        TR_Failure(f, ext_ptw)   => TR_Failure(translationException(ac, f, VS), ext_ptw)
                       }
-                  else TR_Failure(E_Fetch_GPage_Fault(), ext_ptw) /* FIXME: access type is not checked */
+                  else TR_Failure(translationException(ac, PTW_Invalid_Addr(), G), ext_ptw)
                 },
       Sv48x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv48x4)"), /* TODO: Sv48x4 */
       Sv57x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv57x4)"), /* TODO: Sv57x4 */
@@ -201,7 +201,7 @@ function translateAddr(vAddr, ac) = {
 
   match sStageTranslateAddr(vAddr, ac, effPriv, effVirt) {
     TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
-    TR_Address(gpa, ext_ptw) => gStageTranslateAddr(gpa, ac, effPriv, effVirt)   /* G-stage address translation has no effect (Bare) when V=0 */
+    TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, effPriv, effVirt)   /* G-stage address translation has no effect (Bare) when V=0 */
   }
 }
 

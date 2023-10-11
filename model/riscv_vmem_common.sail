@@ -165,6 +165,8 @@ let PTE39_LOG_SIZE  = 3
 let PTE39_SIZE      = 8
 
 type vaddr39 = bits(39)
+type vpn39   = bits(27)
+type pte39   = pte64
 
 bitfield SV39_Vaddr : vaddr39 = {
   VPNi  : 38 .. 12,
@@ -176,7 +178,7 @@ bitfield SV39_Paddr : paddr64 = {
   PgOfs : 11 .. 0
 }
 
-bitfield SV39_PTE : pte64 = {
+bitfield SV39_PTE : pte39 = {
   Ext   : 63 .. 54,
   PPNi  : 53 .. 10,
   RSW   : 9  .. 8,
@@ -191,7 +193,8 @@ let PTE48_LOG_SIZE  = 3
 let PTE48_SIZE      = 8
 
 type vaddr48 = bits(48)
-type pte48   = bits(64)
+type vpn48   = bits(44)
+type pte48   = pte64
 
 bitfield SV48_Vaddr : vaddr48 = {
   VPNi  : 47 .. 12,
@@ -210,21 +213,69 @@ bitfield SV48_PTE : pte48 = {
   BITS  : 7  .. 0
 }
 
-/* Get level i page table offset from virtual page number (VPN)
- *
- * NOTE: should perhaps have vpn param use variable ammount of bits based on Address Translation Mode?
- */
-function PtOfs_from_VPNi(i: nat, vpn: xlenbits, atm: AddressTranslationMode) -> xlenbits =
+/* Get the amount of VPN[i] bits for a given address translation mode */
+function vpn_level_bits(i: nat, atm: AddressTranslationMode) -> range(9, 12) = {
   match (atm, i) {
-    (Bare, _)   => internal_error(__FILE__, __LINE__, "Bare does not make use of VPN"),
-    (Sv32, _)   => shiftl(zero_extend(shiftr(vpn, i * 10)[9 .. 0]), 2),
-    (Sv32x4, 1) => shiftl(zero_extend(shiftr(vpn, i * 10)[11 .. 0]), 2),
-    (Sv32x4, _) => shiftl(zero_extend(shiftr(vpn, i * 10)[9 .. 0]), 2),
-    (Sv39x4, 2) => shiftl(zero_extend(shiftr(vpn, i * 10)[10 .. 0]), 3),
-    (Sv48x4, 3) => shiftl(zero_extend(shiftr(vpn, i * 10)[10 .. 0]), 3),
-    (Sv57x4, 4) => shiftl(zero_extend(shiftr(vpn, i * 10)[10 .. 0]), 3),
-    (_, _)      => shiftl(zero_extend(shiftr(vpn, i * 9)[8 .. 0]), 3)
+    (Bare, _)   => internal_error(__FILE__, __LINE__, "get amount of VPN bits for Bare"),
+    (Sv32, _)   => 10,
+    (Sv32x4, 1) => 12,
+    (Sv32x4, _) => 10,
+    (Sv39x4, 2) => 11,
+    (Sv48x4, 3) => 11,
+    (Sv57x4, 4) => 11,
+    (_, _)      =>  9
   }
+}
+
+/* Get log2 of address translation mode's page table entry size
+ * (amount of bits to shift VPN[i] in order to get address offset)
+ */
+function pte_logsize(atm: AddressTranslationMode) -> nat = {
+  match (atm) {
+    Bare   => internal_error(__FILE__, __LINE__, "get log2 of pte size for Bare"),
+    Sv32   => 2,
+    Sv32x4 => 2,
+    _      => 3
+  }
+}
+
+/* The functions below are parameterized by 'ppnlen, 'vpnlen and
+ * 'paddrlen, to support various address translation modes such
+ * as Sv32, Sv32x4, Sv39, ...
+ */
+
+/* Get level i page table offset from virtual page number (VPN) */
+val PtOfs_from_VPNi : forall 'vpnlen, 'vpnlen < xlen. (nat, bits('vpnlen), AddressTranslationMode) -> xlenbits
+function PtOfs_from_VPNi(i, vpn, atm) =
+  let vpn : xlenbits = zero_extend(vpn) in match (atm) {
+    Bare => internal_error(__FILE__, __LINE__, "get page table offset for Bare"),
+    _    => shiftl(zero_extend(shiftr(vpn, i * vpn_level_bits(0, atm))[vpn_level_bits(i, atm) - 1  .. 0]), pte_logsize(atm)),
+  }
+
+/* Check if a given PPN is a valid pointer to a level i superpage */
+val is_valid_superpage_ppn : forall 'ppnlen, 'ppnlen > 0.
+  (nat, bits('ppnlen), AddressTranslationMode) -> bool
+function is_valid_superpage_ppn(i, ppn, atm) = {
+  /* fixme hack: use a better idiom for masks */
+  let mask : bits('ppnlen) = shiftl(ppn ^ ppn ^ zero_extend(0b1), i * vpn_level_bits(0, atm)) - 1;
+  (ppn & mask) == zero_extend(0b0)
+}
+
+/* Build physical addresses */
+
+val build_paddr : forall 'ppnlen, 'ppnlen > 0.
+  (bits('ppnlen), bits(12)) -> bits('ppnlen + 12)
+function build_paddr(ppn, pgofs) = append(ppn, pgofs)
+
+val build_superpage_paddr : forall 'ppnlen 'vpnlen, ('ppnlen >= 'vpnlen & 'ppnlen > 0). /* FIXME: 'ppnlen >= 'vpnlen does not hold for Sv57 and Sv57x4 */
+  (nat, bits('ppnlen), bits('vpnlen), bits(12), AddressTranslationMode) -> bits('ppnlen + 12)
+function build_superpage_paddr(i, ppn, vpn, pgofs, atm) = {
+  /* fixme hack: use a better idiom for masks */
+  let mask : bits('ppnlen) = shiftl(ppn ^ ppn ^ zero_extend(0b1), i * vpn_level_bits(0, atm)) - 1;
+  let ppn  : bits('ppnlen) = ppn | (zero_extend(vpn) & mask);
+  // let x = sizeof(bits('ppnlen));
+  append(ppn, pgofs)
+}
 
 /* The types below are parameterized by 'paddr and 'pte to support
  * various architectural widths (e.g. RV32, RV64).  ext_ptw supports
@@ -247,4 +298,4 @@ union TR_Result('paddr : Type, 'failure : Type) = {
 
 /* High level address translation */
 val sStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
-val gStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+val gStageTranslateAddr : (xlenbits, AccessType(unit), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)

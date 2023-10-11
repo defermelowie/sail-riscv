@@ -75,8 +75,8 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
   let va = Mk_SV39_Vaddr(vaddr);
   let pt_ofs : paddr64 = shiftl(zero_extend(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[(SV39_LEVEL_BITS - 1) .. 0]),
                                 PTE39_LOG_SIZE);
-    /* TODO: Use G-level translation to access VS-level structures if V=1 */
-  match gStageTranslateAddr(zero_extend(ptb + pt_ofs), ac, User, virt) {
+    /* Use G-level translation to access VS-level structures if V=1 */
+  match gStageTranslateAddr(zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
     TR_Failure(f, ext_ptw) => PTW_Failure(PTW_Access(), ext_ptw), /* FIXME: return correct error cause */
     TR_Address(pte_addr, ext_ptw) => match (mem_read_priv(Read(Data), Supervisor, pte_addr, 8, false, false, false)) {
       MemException(_) => {
@@ -93,13 +93,12 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
         let ext_pte = pte.Ext();
         let pattr = Mk_PTE_Bits(pbits);
         let is_global = global | (pattr.G() == 0b1);
-  /*    print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
-              ^ " pt_base=" ^ BitStr(ptb)
-              ^ " pt_ofs=" ^ BitStr(pt_ofs)
-              ^ " pte_addr=" ^ BitStr(pte_addr)
-              ^ " pte=" ^ BitStr(v)); */
+        // print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
+        //       ^ " pt_base=" ^ BitStr(ptb)
+        //       ^ " pt_ofs=" ^ BitStr(pt_ofs)
+        //       ^ " pte_addr=" ^ BitStr(pte_addr)
+        //       ^ " pte=" ^ BitStr(v));
         if isInvalidPTE(pbits, ext_pte) then {
-  /*      print("walk39: invalid pte"); */
           PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
         } else {
           if isPTEPtr(pbits, ext_pte) then {

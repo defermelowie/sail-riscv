@@ -93,17 +93,18 @@ function isValidSv39x4Addr(vAddr: xlenbits) -> bool = {
 
 /* Sv39x4 page walk */
 val walk39x4 : (xlenbits, vaddr39x4, AccessType(ext_access_type), bool, bool, nat, ext_ptw) -> PTW_Result(paddr39x4, SV39_PTE)
-function walk39x4(ptb, gpa, ac, mxr, sum, level, ext_ptw) = {
-  // print_platform("[WARNING] Sv39x4 page walk is not yet fully implemented");
+function walk39x4(ptb, vAddr, ac, mxr, sum, level, ext_ptw) = {
+  let v_addr : xlenbits = zero_extend(vAddr); /* DEBUG ONLY */
   /* Construct pte address */
-  let va = Mk_Sv39x4_VAddr(gpa);
-  let pt_ofs = PtOfs_from_VPNi(level, zero_extend(va.VPNi()), Sv39x4);
+  let va = Mk_Sv39x4_VAddr(vAddr);
+  let pt_ofs = PtOfs_from_VPNi(level, va.VPNi(), Sv39x4);
   let pte_addr = (ptb + pt_ofs)[55 .. 0];
+
   /* Read pte */
   match (mem_read_priv(Read(Data), Supervisor, zero_extend(pte_addr), 8, false, false, false)) {
-    MemException(_) => PTW_Failure(PTW_Access(), ext_ptw),
+    MemException(_) => PTW_Failure(PTW_Access(), ()),
     MemValue(v) => {
-      // print("walk39x4(gpa=" ^ BitStr(gpa) ^ " level=" ^ string_of_int(level)
+      // print("walk39x4(vAddr=" ^ BitStr(v_addr) ^ " level=" ^ string_of_int(level)
       //   ^ " pt_base=" ^ BitStr(ptb)
       //   ^ " pt_ofs=" ^ BitStr(pt_ofs)
       //   ^ " pte_addr=" ^ BitStr(pte_addr)
@@ -117,23 +118,28 @@ function walk39x4(ptb, gpa, ac, mxr, sum, level, ext_ptw) = {
         if level > 0 then {
           let ptb_next : xlenbits = shiftl(zero_extend(pte.PPNi()), PAGESIZE_BITS);
           let level_next = level - 1;
-          walk39x4(ptb_next, gpa, ac, mxr, sum, level_next, ext_ptw)
+          walk39x4(ptb_next, vAddr, ac, mxr, sum, level_next, ext_ptw)
         } else PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
       /* check access permissions */
       } else match checkPTEPermission(ac, User, mxr, sum, pattr, ext_pte, ext_ptw) {
-        PTE_Check_Failure(ext_ptw, ext_ptw_fail) => PTW_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw),
+        PTE_Check_Failure(ext_ptw, ext_ptw_fail) => PTW_Failure(PTW_No_Permission(), ext_ptw),
         PTE_Check_Success(ext_ptw)  => {
-          // if level > 0 then { /* page table leaf -> superpage */
-          //   let mask = shiftl(0b1, level * SV39x4_LEVEL_BITS) - 1;
-          //   if (pte.PPNi() & mask) != zero_extend(0b0) then PTW_Failure(PTW_Misaligned(), ext_ptw) /* misaligned superpage */
-          //   else {
-          //     let p_addr = append((pte.PPNi | zero_extend(va.VPNi()) & mask), va.PgOfs());
-          //     PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)
-          //   }
-          // } else {  /* page table leaf -> normal page */
-            let p_addr = append(pte.PPNi(), va.PgOfs());
+          if level > 0 then { /* page table leaf -> superpage */
+            if ~(is_valid_superpage_ppn(level, pte.PPNi(), Sv32x4)) then PTW_Failure(PTW_Misaligned(), ext_ptw) /* misaligned superpage */
+            else {
+              let p_addr : paddr64 = build_superpage_paddr(level, pte.PPNi(), va.VPNi(), va.PgOfs(), Sv32x4);
+              // print("vAddr=" ^ BitStr(v_addr));
+              // print("pAddr=" ^ BitStr(p_addr));
+              PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)
+            }
+          }
+          else
+          {  /* page table leaf -> normal page */
+            let p_addr : paddr64 = build_paddr(pte.PPNi(), va.PgOfs());
+            // print("vAddr=" ^ BitStr(v_addr));
+            // print("pAddr=" ^ BitStr(p_addr));
             PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)
-          // }
+          }
         }
       }
     }
@@ -149,6 +155,6 @@ function translate39x4(vmid, ptb, gpa, ac, mxr, sum, ext_ptw) = {
   match walk39x4(zero_extend(ptb), gpa, ac, mxr, sum, SV39x4_LEVELS - 1, ext_ptw) {
     PTW_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
     PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => TR_Address(pAddr, ext_ptw)
-    /* TODO: update A,D bits */
+    /* FIXME: update A,D bits */
   }
 }

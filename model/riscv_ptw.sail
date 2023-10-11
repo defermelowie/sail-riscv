@@ -68,6 +68,10 @@
 /*  SUCH DAMAGE.                                                                         */
 /*=======================================================================================*/
 
+/* Address translation stages */
+
+enum AT_Stage = {VS, S, G} /* FIXME: put in more sensical place */
+
 /* failure modes for address-translation/page-table-walks */
 
 union PTW_Error = {
@@ -102,20 +106,44 @@ function ext_get_ptw_error(eptwf : ext_ptw_fail) -> PTW_Error =
   PTW_No_Permission()
 
 /* conversion of these translation/PTW failures into architectural exceptions */
-function translationException(a : AccessType(ext_access_type), f : PTW_Error) -> ExceptionType = {
+function sStageTranslationException(a : AccessType(ext_access_type), f : PTW_Error) -> ExceptionType = {
   let e : ExceptionType =
   match (a, f) {
-    (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
-    (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
-    (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
-    (Read(_), PTW_Access())      => E_Load_Access_Fault(),
-    (Read(_), _)                 => E_Load_Page_Fault(),
-    (Write(_), PTW_Access())     => E_SAMO_Access_Fault(),
-    (Write(_), _)                => E_SAMO_Page_Fault(),
-    (Execute(), PTW_Access())    => E_Fetch_Access_Fault(),
-    (Execute(), _)               => E_Fetch_Page_Fault()
+      (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
+      (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
+      (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
+      (Read(_), PTW_Access())      => E_Load_Access_Fault(),
+      (Read(_), _)                 => E_Load_Page_Fault(),
+      (Write(_), PTW_Access())     => E_SAMO_Access_Fault(),
+      (Write(_), _)                => E_SAMO_Page_Fault(),
+      (Execute(), PTW_Access())    => E_Fetch_Access_Fault(),
+      (Execute(), _)               => E_Fetch_Page_Fault()
   } in {
-/*  print_mem("translationException(" ^ a ^ ", " ^ f ^ ") -> " ^ e); */
     e
   }
 }
+
+function gStageTranslationException(a : AccessType(ext_access_type), f : PTW_Error) -> ExceptionType = {
+  let e : ExceptionType =
+  match (a, f) {
+      (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
+      (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
+      (ReadWrite(_), _)            => E_SAMO_GPage_Fault(),
+      (Read(_), PTW_Access())      => E_Load_Access_Fault(),
+      (Read(_), _)                 => E_Load_GPage_Fault(),
+      (Write(_), PTW_Access())     => E_SAMO_Access_Fault(),
+      (Write(_), _)                => E_SAMO_GPage_Fault(),
+      (Execute(), PTW_Access())    => E_Fetch_Access_Fault(),
+      (Execute(), _)               => E_Fetch_GPage_Fault()
+  } in {
+    e
+  }
+}
+
+function translationException(a : AccessType(ext_access_type), f : PTW_Error, s: AT_Stage) -> ExceptionType =
+  match s {
+    S => sStageTranslationException(a, f),
+    VS => sStageTranslationException(a, f),
+    G => gStageTranslationException(a, f)
+  }
+
