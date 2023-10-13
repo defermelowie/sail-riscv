@@ -113,7 +113,7 @@ function translateAddr_priv(vAddr, ac, effPriv, effVirt) = {
     Bare => TR_Address(vAddr, ext_ptw),
     Sv32  => match translate32(asid, ptb, vAddr, ac, effPriv, mxr, do_sum, SV32_LEVELS - 1, ext_ptw) {
                TR_Address(pa, ext_ptw) => TR_Address(to_phys_addr(pa), ext_ptw),
-               TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f, S), ext_ptw)
+               TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }

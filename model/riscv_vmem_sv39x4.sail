@@ -108,7 +108,8 @@ function walk39x4(ptb, vAddr, ac, mxr, sum, level, ext_ptw) = {
       //   ^ " pt_base=" ^ BitStr(ptb)
       //   ^ " pt_ofs=" ^ BitStr(pt_ofs)
       //   ^ " pte_addr=" ^ BitStr(pte_addr)
-      //   ^ " pte=" ^ BitStr(v) ^ ")");
+      //   ^ " pte=" ^ BitStr(v)
+      //   ^ ")");
       let pte = Mk_SV39_PTE(v);
       let ext_pte = pte.Ext();
       let pattr = Mk_PTE_Bits(pte.BITS());
@@ -125,9 +126,9 @@ function walk39x4(ptb, vAddr, ac, mxr, sum, level, ext_ptw) = {
         PTE_Check_Failure(ext_ptw, ext_ptw_fail) => PTW_Failure(PTW_No_Permission(), ext_ptw),
         PTE_Check_Success(ext_ptw)  => {
           if level > 0 then { /* page table leaf -> superpage */
-            if ~(is_valid_superpage_ppn(level, pte.PPNi(), Sv32x4)) then PTW_Failure(PTW_Misaligned(), ext_ptw) /* misaligned superpage */
+            if ~(is_valid_superpage_ppn(level, pte.PPNi(), Sv39x4)) then PTW_Failure(PTW_Misaligned(), ext_ptw) /* misaligned superpage */
             else {
-              let p_addr : paddr64 = build_superpage_paddr(level, pte.PPNi(), va.VPNi(), va.PgOfs(), Sv32x4);
+              let p_addr : paddr64 = build_superpage_paddr(level, pte.PPNi(), va.VPNi(), va.PgOfs(), Sv39x4);
               // print("vAddr=" ^ BitStr(v_addr));
               // print("pAddr=" ^ BitStr(p_addr));
               PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)

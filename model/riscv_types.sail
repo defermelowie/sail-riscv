@@ -419,7 +419,19 @@ function hgatpMode_of_bits(a : Architecture, m : hgatp_mode) -> option(AddressTr
     (_, _)      => None()
   }
 
+function AddressTranslationMode_to_str(atm: AddressTranslationMode) -> string = match atm {
+  Bare => "Bare",
+  Sv32 => "Sv32",
+  Sv39 => "Sv39",
+  Sv48 => "Sv48",
+  Sv57 => "Sv57",
+  Sv32x4 => "Sv32x4",
+  Sv39x4 => "Sv39x4",
+  Sv48x4 => "Sv48x4",
+  Sv57x4 => "Sv57x4"
+}
 
+overload to_str = {AddressTranslationMode_to_str}
 
 /* CSR access control bits (from CSR addresses) */
 

@@ -121,18 +121,17 @@ val gStageTranslationMode : (Hgatp64, Privilege, Virtualization) -> AddressTrans
 function gStageTranslationMode(h, priv, virt) = {
   match (virt, priv) {
     (V0, _)       => Bare,
-    (V1, Machine) => internal_error(__FILE__, __LINE__, "Privilege should not be Machine when V=1"),
+    (V1, Machine) => internal_error(__FILE__, __LINE__, "privilege is Machine while V=1"),
     (V1, _)       => {
       match hgatpMode_of_bits(RV64, h.Mode()) {
         Some(m) => m,
-        None()  => internal_error(__FILE__, __LINE__, "Invalid RV64 G-stage translation mode")
+        None()  => internal_error(__FILE__, __LINE__, "invalid RV64 G-stage translation mode")
       }
     }
   }
 }
 
-/* Top-level address translation dispatcher */
-
+/* (V)S-level address translation dispatcher */
 function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   /* Get relevant internal state */
   let mode : AddressTranslationMode = sStageTranslationMode(effPriv, effVirt);
@@ -150,21 +149,22 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
     Sv39  => { if   isValidSv39Addr(vAddr)
                then match translate39(asid, ptb, vAddr[38 .. 0], ac, effPriv, effVirt, mxr, sum, SV39_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f, S), ext_ptw)
+                      TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
                     }
-               else TR_Failure(translationException(ac, PTW_Invalid_Addr(), S), ext_ptw)
+               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
              },
     Sv48  => { if   isValidSv48Addr(vAddr)
                then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f, S), ext_ptw)
+                      TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
                     }
-               else TR_Failure(translationException(ac, PTW_Invalid_Addr(), S), ext_ptw)
+               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
 }
 
+/* G-level address translation dispatcher */
 function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   /* Get relevant internal state */
   let h = Mk_Hgatp64(hgatp);
@@ -181,11 +181,11 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   match mode {
       Bare   => TR_Address(vAddr, ext_ptw),
       Sv39x4 => { if isValidSv39x4Addr(vAddr)
-                  then match translate39x4(vmid, ptb, vAddr[40 .. 0], ac, mxr, sum, ext_ptw) {
+                  then match translate39x4(vmid, ptb, vAddr[40 .. 0], ac, mxr, sum, ext_ptw) { /* No effPriv required since "all memory accesses are considered to be user-level accesses" */
                         TR_Address(spa, ext_ptw) => TR_Address(zero_extend(spa), ext_ptw),
-                        TR_Failure(f, ext_ptw)   => TR_Failure(translationException(ac, f, VS), ext_ptw)
+                        TR_Failure(f, ext_ptw)   => TR_Failure(gStageTranslationException(ac, f), ext_ptw)
                       }
-                  else TR_Failure(translationException(ac, PTW_Invalid_Addr(), G), ext_ptw)
+                  else TR_Failure(gStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
                 },
       Sv48x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv48x4)"), /* TODO: Sv48x4 */
       Sv57x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv57x4)"), /* TODO: Sv57x4 */

@@ -77,14 +77,15 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
                                 PTE39_LOG_SIZE);
     /* Use G-level translation to access VS-level structures if V=1 */
   match gStageTranslateAddr(zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
-    TR_Failure(f, ext_ptw) => PTW_Failure(PTW_Access(), ext_ptw), /* FIXME: return correct error cause */
+    TR_Failure(f, ext_ptw) => PTW_Failure(PTW_Prev_Stage_Error(f), ext_ptw),
     TR_Address(pte_addr, ext_ptw) => match (mem_read_priv(Read(Data), Supervisor, pte_addr, 8, false, false, false)) {
       MemException(_) => {
-  /*    print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
-              ^ " pt_base=" ^ BitStr(ptb)
-              ^ " pt_ofs=" ^ BitStr(pt_ofs)
-              ^ " pte_addr=" ^ BitStr(pte_addr)
-              ^ ": invalid pte address"); */
+        // print("walk39(vaddr=" ^ BitStr(vaddr)
+        //   ^ " level=" ^ string_of_int(level)
+        //   ^ " pt_base=" ^ BitStr(ptb)
+        //   ^ " pt_ofs=" ^ BitStr(pt_ofs)
+        //   ^ " pte_addr=" ^ BitStr(pte_addr)
+        //   ^ ": invalid pte address");
         PTW_Failure(PTW_Access(), ext_ptw)
       },
       MemValue(v) => {
@@ -93,11 +94,12 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
         let ext_pte = pte.Ext();
         let pattr = Mk_PTE_Bits(pbits);
         let is_global = global | (pattr.G() == 0b1);
-        // print("walk39(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
-        //       ^ " pt_base=" ^ BitStr(ptb)
-        //       ^ " pt_ofs=" ^ BitStr(pt_ofs)
-        //       ^ " pte_addr=" ^ BitStr(pte_addr)
-        //       ^ " pte=" ^ BitStr(v));
+        // print("walk39(vaddr=" ^ BitStr(vaddr)
+        //   ^ " level=" ^ string_of_int(level)
+        //   ^ " pt_base=" ^ BitStr(ptb)
+        //   ^ " pt_ofs=" ^ BitStr(pt_ofs)
+        //   ^ " pte_addr=" ^ BitStr(pte_addr)
+        //   ^ " pte=" ^ BitStr(v));
         if isInvalidPTE(pbits, ext_pte) then {
           PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
         } else {
@@ -242,6 +244,10 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
                   },
                   MemException(e) => {
                     /* pte is not in valid memory */
+                    print("translate39(pte_addr=" ^ BitStr(pteAddr)
+                      ^ " pte=" ^ BitStr(pte.bits())
+                      ^ " w_pte=" ^ BitStr(w_pte.bits())
+                      ^ ")");
                     TR_Failure(PTW_Access(), ext_ptw)
                   }
                 }
