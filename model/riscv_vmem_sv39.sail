@@ -75,7 +75,7 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
   let va = Mk_SV39_Vaddr(vaddr);
   let pt_ofs : paddr64 = shiftl(zero_extend(shiftr(va.VPNi(), (level * SV39_LEVEL_BITS))[(SV39_LEVEL_BITS - 1) .. 0]),
                                 PTE39_LOG_SIZE);
-    /* Use G-level translation to access VS-level structures if V=1 */
+  /* Use G-level translation to access VS-level structures if V=1 */
   match gStageTranslateAddr(zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
     TR_Failure(f, ext_ptw) => PTW_Failure(PTW_Prev_Stage_Error(f), ext_ptw),
     TR_Address(pte_addr, ext_ptw) => match (mem_read_priv(Read(Data), Supervisor, pte_addr, 8, false, false, false)) {

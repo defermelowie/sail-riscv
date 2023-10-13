@@ -154,7 +154,7 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
                else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
              },
     Sv48  => { if   isValidSv48Addr(vAddr)
-               then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
+               then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
                       TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
                     }
