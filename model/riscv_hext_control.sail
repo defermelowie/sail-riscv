@@ -98,8 +98,8 @@ function clause ext_is_CSR_defined(0x244, _) = haveHExt() /* vsip */
 function clause ext_is_CSR_defined(0x280, _) = haveHExt() /* vsatp */
 
 /* H-ext CSR read handles */
-// function clause ext_read_CSR(0x34A) = Some() /* mtinst */
-// function clause ext_read_CSR(0x34B) = Some() /* mtval2 */
+function clause ext_read_CSR(0x34A) = Some(mtinst) /* mtinst */
+function clause ext_read_CSR(0x34B) = Some(mtval2) /* mtval2 */
 function clause ext_read_CSR(0x600) = Some(get_hstatus()) /* hstatus */
 function clause ext_read_CSR(0x602) = Some(get_hedeleg()) /* hedeleg */
 // function clause ext_read_CSR(0x603) = Some() /* hideleg */
@@ -181,14 +181,14 @@ function init_hext() -> unit = {
   /* TODO: init hie */
   /* TODO: init hcounteren */
   /* TODO: init hgeie */
-  /* TODO: init htval */
+  // htval->bits() = zero_extend(0b0);
   /* TODO: init hip */
   /* TODO: init hvip */
-  /* TODO: init htinst */
+  // htinst->bits() = zero_extend(0b0);
   /* TODO: init hgeip */
   /* TODO: init henvcfg */
   /* TODO: init henvcfgh */
-  /* TODO: init hgatp */
+  hgatp = zero_extend(0b0);
   /* TODO: init htimedelta */
   /* TODO: init htimedeltah */
 

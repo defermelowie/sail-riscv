@@ -262,7 +262,6 @@ function is_valid_superpage_ppn(i, ppn, atm) = {
 }
 
 /* Build physical addresses */
-
 val build_paddr : forall 'ppnlen, 'ppnlen > 0.
   (bits('ppnlen), bits(12)) -> bits('ppnlen + 12)
 function build_paddr(ppn, pgofs) = append(ppn, pgofs)
@@ -273,7 +272,6 @@ function build_superpage_paddr(i, ppn, vpn, pgofs, atm) = {
   /* fixme hack: use a better idiom for masks */
   let mask : bits('ppnlen) = shiftl(ppn ^ ppn ^ zero_extend(0b1), i * vpn_level_bits(0, atm)) - 1;
   let ppn  : bits('ppnlen) = ppn | (zero_extend(vpn) & mask);
-  // let x = sizeof(bits('ppnlen));
   append(ppn, pgofs)
 }
 

@@ -129,16 +129,12 @@ function walk39x4(ptb, vAddr, ac, mxr, sum, level, ext_ptw) = {
             if ~(is_valid_superpage_ppn(level, pte.PPNi(), Sv39x4)) then PTW_Failure(PTW_Misaligned(), ext_ptw) /* misaligned superpage */
             else {
               let p_addr : paddr64 = build_superpage_paddr(level, pte.PPNi(), va.VPNi(), va.PgOfs(), Sv39x4);
-              // print("vAddr=" ^ BitStr(v_addr));
-              // print("pAddr=" ^ BitStr(p_addr));
               PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)
             }
           }
           else
           {  /* page table leaf -> normal page */
             let p_addr : paddr64 = build_paddr(pte.PPNi(), va.PgOfs());
-            // print("vAddr=" ^ BitStr(v_addr));
-            // print("pAddr=" ^ BitStr(p_addr));
             PTW_Success(p_addr, pte, pte_addr, level, false, ext_ptw)
           }
         }
@@ -147,15 +143,36 @@ function walk39x4(ptb, vAddr, ac, mxr, sum, level, ext_ptw) = {
   }
 }
 
+/* TLB management: single entry for now */
+
+// ideally we would use the below form:
+// type TLB39x4_Entry = TLB_Entry(sizeof(vmid39x4), sizeof(vaddr39x4), sizeof(paddr39x4), sizeof(pte39x4))
+type TLB39x4_Entry = TLB_Entry(14, 41, 56, 64)
+register tlb39x4 : option(TLB39x4_Entry)
+
 /* Translate Sv39x4 guest virtual address to supervisor physical address
  *
  * NOTE: vmid is not used but is required for implementing TLBs in the future
  */
 val translate39x4 : (vmid39x4, paddr39x4, vaddr39x4, AccessType(ext_access_type), bool, bool, ext_ptw) -> TR_Result(paddr39x4, PTW_Error)
 function translate39x4(vmid, ptb, gpa, ac, mxr, sum, ext_ptw) = {
+  // TODO: TLB lookup
   match walk39x4(zero_extend(ptb), gpa, ac, mxr, sum, SV39x4_LEVELS - 1, ext_ptw) {
     PTW_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
-    PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => TR_Address(pAddr, ext_ptw)
-    /* FIXME: update A,D bits */
+    PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
+      match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, pte.Ext()) {
+        None() => {
+          // TODO: add_to_TLB39x4
+          print("Sv39x4: pte bits not updated");
+          TR_Address(pAddr, ext_ptw)
+        },
+        Some(pbits, ext) => {
+          /* FIXME: update A,D bits */
+          // TODO: add_to_TLB39x4
+          print("Sv39x4: pte bits should be updated");
+          TR_Address(pAddr, ext_ptw)
+        }
+      }
+    }
   }
 }

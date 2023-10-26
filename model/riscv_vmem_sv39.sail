@@ -77,7 +77,7 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
                                 PTE39_LOG_SIZE);
   /* Use G-level translation to access VS-level structures if V=1 */
   match gStageTranslateAddr(zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
-    TR_Failure(f, ext_ptw) => PTW_Failure(PTW_Prev_Stage_Error(f), ext_ptw),
+    TR_Failure(f, ext_ptw) => PTW_Failure(PTW_G_Stage_Error(f), ext_ptw),
     TR_Address(pte_addr, ext_ptw) => match (mem_read_priv(Read(Data), Supervisor, pte_addr, 8, false, false, false)) {
       MemException(_) => {
         // print("walk39(vaddr=" ^ BitStr(vaddr)
@@ -244,10 +244,10 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
                   },
                   MemException(e) => {
                     /* pte is not in valid memory */
-                    print("translate39(pte_addr=" ^ BitStr(pteAddr)
-                      ^ " pte=" ^ BitStr(pte.bits())
-                      ^ " w_pte=" ^ BitStr(w_pte.bits())
-                      ^ ")");
+                    // print("translate39(pte_addr=" ^ BitStr(pteAddr)
+                    //   ^ " pte=" ^ BitStr(pte.bits())
+                    //   ^ " w_pte=" ^ BitStr(w_pte.bits())
+                    //   ^ ")");
                     TR_Failure(PTW_Access(), ext_ptw)
                   }
                 }
