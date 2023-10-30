@@ -89,14 +89,14 @@ type pte32   = bits(32)
 /* asid */
 type asid32 = bits(9)
 
-function curAsid32(satp : bits(32)) -> asid32 = {
-  let s = Mk_Satp32(satp);
+function curAsid32(s : bits(32)) -> asid32 = {
+  let s = Mk_Satp32(s);
   s.Asid()
 }
 
 /* page table base from satp */
-function curPTB32(satp : bits(32)) -> paddr32 = {
-  let s : Satp32 = Mk_Satp32(satp);
+function curPTB32(s : bits(32)) -> paddr32 = {
+  let s : Satp32 = Mk_Satp32(s);
   shiftl(zero_extend(s.PPN()), PAGESIZE_BITS)
 }
 
@@ -144,15 +144,16 @@ type pte64   = bits(64)
 /* asid */
 
 type asid64 = bits(16)
+type vmid64 = bits(14)
 
-function curAsid64(satp : bits(64)) -> asid64 = {
-  let s = Mk_Satp64(satp);
+function curAsid64(s : bits(64)) -> asid64 = {
+  let s = Mk_Satp64(s);
   s.Asid()
 }
 
 /* page table base from satp */
-function curPTB64(satp : bits(64)) -> paddr64 = {
-  let s = Mk_Satp64(satp);
+function curPTB64(s : bits(64)) -> paddr64 = {
+  let s = Mk_Satp64(s);
   shiftl(zero_extend(s.PPN()), PAGESIZE_BITS)
 }
 
@@ -164,6 +165,8 @@ let PTE39_LOG_SIZE  = 3
 let PTE39_SIZE      = 8
 
 type vaddr39 = bits(39)
+type vpn39   = bits(27)
+type pte39   = pte64
 
 bitfield SV39_Vaddr : vaddr39 = {
   VPNi  : 38 .. 12,
@@ -175,7 +178,7 @@ bitfield SV39_Paddr : paddr64 = {
   PgOfs : 11 .. 0
 }
 
-bitfield SV39_PTE : pte64 = {
+bitfield SV39_PTE : pte39 = {
   Ext   : 63 .. 54,
   PPNi  : 53 .. 10,
   RSW   : 9  .. 8,
@@ -190,7 +193,8 @@ let PTE48_LOG_SIZE  = 3
 let PTE48_SIZE      = 8
 
 type vaddr48 = bits(48)
-type pte48   = bits(64)
+type vpn48   = bits(44)
+type pte48   = pte64
 
 bitfield SV48_Vaddr : vaddr48 = {
   VPNi  : 47 .. 12,
@@ -207,6 +211,69 @@ bitfield SV48_PTE : pte48 = {
   PPNi  : 53 .. 10,
   RSW   : 9  .. 8,
   BITS  : 7  .. 0
+}
+
+/* Get the amount of VPN[i] bits for a given address translation mode */
+function vpn_level_bits(i: nat, atm: AddressTranslationMode) -> range(9, 12) = {
+  match (atm, i) {
+    (Bare, _)   => internal_error(__FILE__, __LINE__, "get amount of VPN bits for Bare"),
+    (Sv32, _)   => 10,
+    (Sv32x4, 1) => 12,
+    (Sv32x4, _) => 10,
+    (Sv39x4, 2) => 11,
+    (Sv48x4, 3) => 11,
+    (Sv57x4, 4) => 11,
+    (_, _)      =>  9
+  }
+}
+
+/* Get log2 of address translation mode's page table entry size
+ * (amount of bits to shift VPN[i] in order to get address offset)
+ */
+function pte_logsize(atm: AddressTranslationMode) -> nat = {
+  match (atm) {
+    Bare   => internal_error(__FILE__, __LINE__, "get log2 of pte size for Bare"),
+    Sv32   => 2,
+    Sv32x4 => 2,
+    _      => 3
+  }
+}
+
+/* The functions below are parameterized by 'ppnlen, 'vpnlen and
+ * 'paddrlen, to support various address translation modes such
+ * as Sv32, Sv32x4, Sv39, ...
+ */
+
+/* Get level i page table offset from virtual page number (VPN) */
+val PtOfs_from_VPNi : forall 'vpnlen, 'vpnlen < xlen.
+  (nat, bits('vpnlen), AddressTranslationMode) -> xlenbits
+function PtOfs_from_VPNi(i, vpn, atm) =
+  let vpn : xlenbits = zero_extend(vpn) in match (atm) {
+    Bare => internal_error(__FILE__, __LINE__, "get page table offset for Bare"),
+    _    => shiftl(zero_extend(shiftr(vpn, i * vpn_level_bits(0, atm))[vpn_level_bits(i, atm) - 1  .. 0]), pte_logsize(atm)),
+  }
+
+/* Check if a given PPN is a valid pointer to a level i superpage */
+val is_valid_superpage_ppn : forall 'ppnlen, 'ppnlen > 0.
+  (nat, bits('ppnlen), AddressTranslationMode) -> bool
+function is_valid_superpage_ppn(i, ppn, atm) = {
+  /* fixme hack: use a better idiom for masks */
+  let mask : bits('ppnlen) = shiftl(ppn ^ ppn ^ zero_extend(0b1), i * vpn_level_bits(0, atm)) - 1;
+  (ppn & mask) == zero_extend(0b0)
+}
+
+/* Build physical addresses */
+val build_paddr : forall 'ppnlen, 'ppnlen > 0.
+  (bits('ppnlen), bits(12)) -> bits('ppnlen + 12)
+function build_paddr(ppn, pgofs) = append(ppn, pgofs)
+
+val build_superpage_paddr : forall 'ppnlen 'vpnlen, ('ppnlen >= 'vpnlen & 'ppnlen > 0). /* FIXME: 'ppnlen >= 'vpnlen does not hold for Sv57 and Sv57x4 */
+  (nat, bits('ppnlen), bits('vpnlen), bits(12), AddressTranslationMode) -> bits('ppnlen + 12)
+function build_superpage_paddr(i, ppn, vpn, pgofs, atm) = {
+  /* fixme hack: use a better idiom for masks */
+  let mask : bits('ppnlen) = shiftl(ppn ^ ppn ^ zero_extend(0b1), i * vpn_level_bits(0, atm)) - 1;
+  let ppn  : bits('ppnlen) = ppn | (zero_extend(vpn) & mask);
+  append(ppn, pgofs)
 }
 
 /* The types below are parameterized by 'paddr and 'pte to support
@@ -227,3 +294,7 @@ union TR_Result('paddr : Type, 'failure : Type) = {
   TR_Address : ('paddr, ext_ptw),
   TR_Failure : ('failure, ext_ptw)
 }
+
+/* High level address translation */
+val sStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+val gStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)

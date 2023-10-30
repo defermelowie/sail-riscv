@@ -357,6 +357,59 @@ function exceptionType_to_str(e) =
 
 overload to_str = {exceptionType_to_str}
 
+/* Get update exception for a given memory access type
+ * NOTE: could probably be modeled in a nicer, more intuitive manner */
+
+function E_Addr_Align_of_AccessType(a: AccessType(ext_access_type)) -> ExceptionType =
+  match a {
+    Read(_)      => E_Load_Addr_Align(),
+    Write(_)     => E_SAMO_Addr_Align(),
+    ReadWrite(_) => E_SAMO_Addr_Align(),
+    Execute(_)   => E_Fetch_Addr_Align(),
+  }
+
+function E_Access_Fault_of_AccessType(a: AccessType(ext_access_type)) -> ExceptionType =
+  match a {
+    Read(_)      => E_Load_Access_Fault(),
+    Write(_)     => E_SAMO_Access_Fault(),
+    ReadWrite(_) => E_SAMO_Access_Fault(),
+    Execute(_)   => E_Fetch_Access_Fault(),
+  }
+
+function E_Page_Fault_of_AccessType(a: AccessType(ext_access_type)) -> ExceptionType =
+  match a {
+    Read(_)      => E_Load_Page_Fault(),
+    Write(_)     => E_SAMO_Page_Fault(),
+    ReadWrite(_) => E_SAMO_Page_Fault(),
+    Execute(_)   => E_Fetch_Page_Fault(),
+  }
+
+function E_GPage_Fault_of_AccessType(a: AccessType(ext_access_type)) -> ExceptionType =
+  match a {
+    Read(_)      => E_Load_GPage_Fault(),
+    Write(_)     => E_SAMO_GPage_Fault(),
+    ReadWrite(_) => E_SAMO_GPage_Fault(),
+    Execute(_)   => E_Fetch_GPage_Fault(),
+  }
+
+val exceptionType_update_AccessType : (ExceptionType, AccessType(ext_access_type)) -> ExceptionType
+function exceptionType_update_AccessType(e, a) =
+match(e) {
+  E_Fetch_Addr_Align()   => E_Addr_Align_of_AccessType(a),
+  E_Load_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+  E_SAMO_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+  E_Fetch_Access_Fault() => E_Access_Fault_of_AccessType(a),
+  E_Load_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+  E_SAMO_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+  E_Fetch_Page_Fault()   => E_Page_Fault_of_AccessType(a),
+  E_Load_Page_Fault()    => E_Page_Fault_of_AccessType(a),
+  E_SAMO_Page_Fault()    => E_Page_Fault_of_AccessType(a),
+  E_Fetch_GPage_Fault()  => E_GPage_Fault_of_AccessType(a),
+  E_Load_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+  E_SAMO_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+  _ => e /* Other exceptions are not access type specific */
+}
+
 /* trap modes */
 
 type tv_mode = bits(2)
@@ -393,19 +446,45 @@ function extStatus_of_bits(e) =
     0b11 => Dirty
   }
 
-/* supervisor-level address translation modes */
+/* address translation modes */
+enum AddressTranslationMode = {Bare, Sv32, Sv39, Sv48, Sv57, Sv32x4, Sv39x4, Sv48x4, Sv57x4}
 
 type satp_mode = bits(4)
-enum SATPMode = {Sbare, Sv32, Sv39, Sv48}
+type hgatp_mode = bits(4)
 
-function satp64Mode_of_bits(a : Architecture, m : satp_mode) -> option(SATPMode) =
+function satp64Mode_of_bits(a : Architecture, m : satp_mode) -> option(AddressTranslationMode) =
   match (a, m) {
-    (_,    0x0) => Some(Sbare),
+    (_,    0x0) => Some(Bare),
     (RV32, 0x1) => Some(Sv32),
     (RV64, 0x8) => Some(Sv39),
     (RV64, 0x9) => Some(Sv48),
+    (RV64, 0xa) => Some(Sv57),
     (_, _)      => None()
   }
+
+function hgatpMode_of_bits(a : Architecture, m : hgatp_mode) -> option(AddressTranslationMode) =
+  match (a, m) {
+    (_,    0x0) => Some(Bare),
+    (RV32, 0x1) => Some(Sv32x4),
+    (RV64, 0x8) => Some(Sv39x4),
+    (RV64, 0x9) => Some(Sv48x4),
+    (RV64, 0xa) => Some(Sv57x4),
+    (_, _)      => None()
+  }
+
+function AddressTranslationMode_to_str(atm: AddressTranslationMode) -> string = match atm {
+  Bare => "Bare",
+  Sv32 => "Sv32",
+  Sv39 => "Sv39",
+  Sv48 => "Sv48",
+  Sv57 => "Sv57",
+  Sv32x4 => "Sv32x4",
+  Sv39x4 => "Sv39x4",
+  Sv48x4 => "Sv48x4",
+  Sv57x4 => "Sv57x4"
+}
+
+overload to_str = {AddressTranslationMode_to_str}
 
 /* CSR access control bits (from CSR addresses) */
 

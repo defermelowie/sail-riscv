@@ -98,8 +98,8 @@ function clause ext_is_CSR_defined(0x244, _) = haveHExt() /* vsip */
 function clause ext_is_CSR_defined(0x280, _) = haveHExt() /* vsatp */
 
 /* H-ext CSR read handles */
-// function clause ext_read_CSR(0x34A) = Some() /* mtinst */
-// function clause ext_read_CSR(0x34B) = Some() /* mtval2 */
+function clause ext_read_CSR(0x34A) = Some(mtinst) /* mtinst */
+function clause ext_read_CSR(0x34B) = Some(mtval2) /* mtval2 */
 function clause ext_read_CSR(0x600) = Some(get_hstatus()) /* hstatus */
 function clause ext_read_CSR(0x602) = Some(get_hedeleg()) /* hedeleg */
 // function clause ext_read_CSR(0x603) = Some() /* hideleg */
@@ -113,7 +113,7 @@ function clause ext_read_CSR(0x602) = Some(get_hedeleg()) /* hedeleg */
 // function clause ext_read_CSR(0xE12) = Some() /* hgeip */
 // function clause ext_read_CSR(0x60A) = Some() /* henvcfg */
 // function clause ext_read_CSR(0x61A) = Some() /* henvcfgh */
-// function clause ext_read_CSR(0x680) = Some() /* hgatp */
+// function clause ext_read_CSR(0x680) = Some(get_hgatp()) /* hgatp */
 // function clause ext_read_CSR(0x605) = Some() /* htimedelta */
 // function clause ext_read_CSR(0x615) = Some() /* htimedeltah */
 /* TODO: VS* CSR read access checks */
@@ -125,18 +125,19 @@ function clause ext_read_CSR(0x241) = Some(get_xret_target(Supervisor, V1)) /* v
 function clause ext_read_CSR(0x242) = Some(get_vscause()) /* vscause */
 function clause ext_read_CSR(0x243) = Some(get_vstval()) /* vstval */
 // function clause ext_read_CSR(0x244) = Some() /* vsip */
-// function clause ext_read_CSR(0x280) = Some() /* vsatp */
+function clause ext_read_CSR(0x280) = Some(get_vsatp()) /* vsatp */
 
 /* H-ext CSR write handles */
 function clause ext_write_CSR(0x600, value) = { hstatus = legalize_hstatus(hstatus, value); Some(get_hstatus()) }
 function clause ext_write_CSR(0x602, value) = { hedeleg = legalize_hedeleg(hedeleg, value); Some(get_hedeleg()) }
-/* TODO: VS* CSR write access checks */
+// function clause ext_write_CSR(0x680, value) = { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(get_hgatp()) }
 function clause ext_write_CSR(0x200, value) = { vsstatus = legalize_vsstatus(vsstatus, value); Some(get_vsstatus()) }
 function clause ext_write_CSR(0x205, value) = { Some(set_trap_vector(Supervisor, V1, value)) }
 function clause ext_write_CSR(0x240, value) = { vsscratch = value; Some(get_vsscratch()) }
 function clause ext_write_CSR(0x241, value) = { Some(set_xret_target(Supervisor, V1, value)) }
 function clause ext_write_CSR(0x242, value) = { vscause->bits() = value; Some(get_vscause()) }
 function clause ext_write_CSR(0x243, value) = { vstval = value; Some(get_vstval()) }
+function clause ext_write_CSR(0x280, value) = { vsatp = value; Some(get_vsatp()) }
 
 /* Initialize hypervisor extension */
 function init_hext() -> unit = {
@@ -180,14 +181,14 @@ function init_hext() -> unit = {
   /* TODO: init hie */
   /* TODO: init hcounteren */
   /* TODO: init hgeie */
-  /* TODO: init htval */
+  // htval->bits() = zero_extend(0b0);
   /* TODO: init hip */
   /* TODO: init hvip */
-  /* TODO: init htinst */
+  // htinst->bits() = zero_extend(0b0);
   /* TODO: init hgeip */
   /* TODO: init henvcfg */
   /* TODO: init henvcfgh */
-  /* TODO: init hgatp */
+  hgatp = zero_extend(0b0);
   /* TODO: init htimedelta */
   /* TODO: init htimedeltah */
 
@@ -203,7 +204,7 @@ function init_hext() -> unit = {
   vstval = zero_extend(0b0);
   /* TODO: init vsie */
   /* TODO: init vsip */
-  /* TODO: init vsatp */
+  vsatp = zero_extend(0b0);
 }
 
 /* Determine if an illegal CSR access should raise a "virtual instruction exception" instead of an "illegal instruction exception"
@@ -247,4 +248,12 @@ function raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isW
         (_, _)    => false,
       } else false
     },
+  }
+
+
+/* Get (v)sapt based on virtualization mode if H-ext is enabled */
+function xatp(effVirt: Virtualization) -> xlenbits =
+  match (effVirt, haveHExt()) {
+    (V1, true) => vsatp,
+    (_, _)     => satp
   }
