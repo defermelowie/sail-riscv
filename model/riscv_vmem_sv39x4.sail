@@ -163,14 +163,31 @@ function translate39x4(vmid, ptb, gpa, ac, mxr, sum, ext_ptw) = {
       match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, pte.Ext()) {
         None() => {
           // TODO: add_to_TLB39x4
-          print("Sv39x4: pte bits not updated");
+          // print("Sv39x4: pte bits do not require update");
           TR_Address(pAddr, ext_ptw)
         },
         Some(pbits, ext) => {
-          /* FIXME: update A,D bits */
-          // TODO: add_to_TLB39x4
-          print("Sv39x4: pte bits should be updated");
-          TR_Address(pAddr, ext_ptw)
+          if not(plat_enable_dirty_update())
+          then {
+            /* pte needs dirty/accessed update but that is not enabled */
+            // print("Sv39x4: pte bits require update but this is disabled");
+            TR_Failure(PTW_PTE_Update(), ext_ptw)
+          } else {
+            var w_pte : SV39_PTE = update_BITS(pte, pbits.bits());
+            w_pte = update_Ext(w_pte, ext);
+            match mem_write_value_priv(zero_extend(pteAddr), 8, w_pte.bits(), Supervisor, false, false, false) {
+              MemValue(_) => {
+                // TODO: add_to_TLB39x4
+                // print("Sv39x4: pte bits are updated");
+                TR_Address(pAddr, ext_ptw)
+              },
+              MemException(e) => {
+                /* pte is not in valid memory */
+                // print("Sv39x4: pte bits require update but pte address was invalid");
+                TR_Failure(PTW_Access(), ext_ptw)
+              }
+            }
+          }
         }
       }
     }

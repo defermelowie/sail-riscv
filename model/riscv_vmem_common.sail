@@ -245,7 +245,8 @@ function pte_logsize(atm: AddressTranslationMode) -> nat = {
  */
 
 /* Get level i page table offset from virtual page number (VPN) */
-val PtOfs_from_VPNi : forall 'vpnlen, 'vpnlen < xlen. (nat, bits('vpnlen), AddressTranslationMode) -> xlenbits
+val PtOfs_from_VPNi : forall 'vpnlen, 'vpnlen < xlen.
+  (nat, bits('vpnlen), AddressTranslationMode) -> xlenbits
 function PtOfs_from_VPNi(i, vpn, atm) =
   let vpn : xlenbits = zero_extend(vpn) in match (atm) {
     Bare => internal_error(__FILE__, __LINE__, "get page table offset for Bare"),

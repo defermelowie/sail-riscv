@@ -260,11 +260,6 @@ bitfield Mstatus : xlenbits = {
 }
 register mstatus : Mstatus
 
-function effectivePrivilege(t : AccessType(ext_access_type), m : Mstatus, priv : Privilege) -> Privilege =
-  if   t != Execute() & m.MPRV() == 0b1
-  then privLevel_of_bits(m.MPP())
-  else priv
-
 function get_mstatus_SXL(m : Mstatus) -> arch_xlen = {
   if   sizeof(xlen) == 32
   then arch_to_bits(RV32)
@@ -336,6 +331,16 @@ function set_mstatush_MPV(mh : Mstatush, v : virt_mode) -> Mstatush = {
   then update_MPV(mh, v)
   else mh
 }
+
+function effectivePrivilege(t : AccessType(ext_access_type), m : Mstatus, priv : Privilege) -> Privilege =
+  if   t != Execute() & m.MPRV() == 0b1
+  then privLevel_of_bits(m.MPP())
+  else priv
+
+function effectiveVirtualization(t : AccessType(ext_access_type), m : Mstatus, mh: Mstatush, virt : Virtualization) -> Virtualization =
+  if   t != Execute() & m.MPRV() == 0b1
+  then virtMode_of_bits(get_mstatus_MPV(m, mh))
+  else virt
 
 function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   /*

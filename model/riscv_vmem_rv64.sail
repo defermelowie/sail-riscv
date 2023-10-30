@@ -197,7 +197,7 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr(vAddr, ac) = {
   let effPriv = effectivePrivilege(ac, mstatus, cur_privilege);
-  let effVirt = cur_virtualization; /* FIXME: use effective V instead of current */
+  let effVirt = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
 
   match sStageTranslateAddr(vAddr, ac, effPriv, effVirt) {
     TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
