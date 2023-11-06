@@ -95,23 +95,23 @@ function translationMode(priv, virt) = {
   }
 }
 
-/* Top-level address translation dispatcher */
 
-val translateAddr_priv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
-function translateAddr_priv(vAddr, ac, effPriv, effVirt) = {
+/* Translate address for a given Privilege level and Virtualization mode */
+val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+function translateAddr_priv(vAddr, ac, priv, virt) = {
   let mxr    : bool   = mstatus.MXR() == 0b1;
   let do_sum : bool   = mstatus.SUM() == 0b1;
-  let mode : AddressTranslationMode = translationMode(effPriv, effVirt);
+  let mode : AddressTranslationMode = translationMode(priv, virt);
 
-  let asid = curAsid32(xatp(effVirt));
-  let ptb  = curPTB32(xatp(effVirt));
+  let asid = curAsid32(xatp(virt));
+  let ptb  = curPTB32(xatp(virt));
 
   /* PTW extensions: initialize the PTW extension state */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
   match mode {
     Bare => TR_Address(vAddr, ext_ptw),
-    Sv32  => match translate32(asid, ptb, vAddr, ac, effPriv, mxr, do_sum, SV32_LEVELS - 1, ext_ptw) {
+    Sv32  => match translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, SV32_LEVELS - 1, ext_ptw) {
                TR_Address(pa, ext_ptw) => TR_Address(to_phys_addr(pa), ext_ptw),
                TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
              },
@@ -119,9 +119,14 @@ function translateAddr_priv(vAddr, ac, effPriv, effVirt) = {
   }
 }
 
+/* Top-level address translation dispatcher */
 val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
-function translateAddr(vAddr, ac) =
-  translateAddr_priv(vAddr, ac, effectivePrivilege(ac, mstatus, cur_privilege), cur_virtualization)
+function translateAddr(vAddr, ac) = {
+  let effPriv = effectivePrivilege(ac, mstatus, cur_privilege);
+  let effVirt = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
+
+  translateAddr_pv(vAddr, ac, effPriv, effVirt)
+}
 
 val flush_TLB : (option(xlenbits), option(xlenbits)) -> unit
 function flush_TLB(asid_xlen, addr_xlen) -> unit = {

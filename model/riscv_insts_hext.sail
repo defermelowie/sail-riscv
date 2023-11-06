@@ -4,6 +4,28 @@
 
 /* ****************************************************************** */
 
+// TODO: hlv.b
+// TODO: hlv.bu
+// TODO: hlv.h
+// TODO: hlv.hu
+// TODO: hlv.w
+// TODO: hlv.wu
+// TODO: hlv.d
+
+/* ****************************************************************** */
+
+// TODO: hsv.b
+// TODO: hsv.h
+// TODO: hsv.w
+// TODO: hsv.d
+
+/* ****************************************************************** */
+
+// TODO: hlvx.hu
+// TODO: hlvx.wu
+
+/* ****************************************************************** */
+
 union clause ast = HFENCE_VVMA : (regidx, regidx)
 
 mapping clause encdec = HFENCE_VVMA(rs1, rs2)

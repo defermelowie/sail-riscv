@@ -193,16 +193,21 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   };
 }
 
+/* Translate address for a given Privilege level and Virtualization mode */
+val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+function translateAddr_pv(vAddr, ac, priv, virt) =
+    match sStageTranslateAddr(vAddr, ac, priv, virt) {
+    TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
+    TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, priv, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
+  }
+
 /* Top-level address translation dispatcher */
 val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr(vAddr, ac) = {
   let effPriv = effectivePrivilege(ac, mstatus, cur_privilege);
   let effVirt = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
 
-  match sStageTranslateAddr(vAddr, ac, effPriv, effVirt) {
-    TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
-    TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, effPriv, effVirt)   /* G-stage address translation has no effect (Bare) when V=0 */
-  }
+  translateAddr_pv(vAddr, ac, effPriv, effVirt)
 }
 
 val flush_TLB : (option(xlenbits), option(xlenbits)) -> unit
