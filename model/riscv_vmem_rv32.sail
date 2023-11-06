@@ -98,7 +98,7 @@ function translationMode(priv, virt) = {
 
 /* Translate address for a given Privilege level and Virtualization mode */
 val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
-function translateAddr_priv(vAddr, ac, priv, virt) = {
+function translateAddr_pv(vAddr, ac, priv, virt) = {
   let mxr    : bool   = mstatus.MXR() == 0b1;
   let do_sum : bool   = mstatus.SUM() == 0b1;
   let mode : AddressTranslationMode = translationMode(priv, virt);
