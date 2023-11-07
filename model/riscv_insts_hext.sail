@@ -35,7 +35,7 @@ function clause execute(HLV(width, is_unsigned, rs1, rd)) =
           BYTE   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 1, false, false, false), is_unsigned),
           HALF   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 2, false, false, false), is_unsigned),
           WORD   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 4, false, false, false), is_unsigned),
-          DOUBLE => process_load(rd, vaddr, mem_read(Read(Data), paddr, 8, false, false, false), is_unsigned),
+          DOUBLE if sizeof(xlen_bytes) >= 8 => process_load(rd, vaddr, mem_read(Read(Data), paddr, 8, false, false, false), is_unsigned),
         }
       }
   }
