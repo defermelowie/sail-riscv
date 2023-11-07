@@ -845,13 +845,76 @@ union clause ast = WFI : unit
 mapping clause encdec = WFI()
   <-> 0b000100000101 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
+function timeout_wfi(timeout_exc: ExceptionType) -> Retired = {
+  /* Should cause exception if WFI does not complete within an
+   * implementation-specific bounded time limit. This time limit
+   * may be zero, in which case WFI in a less-privilleged mode
+   * always causes an exception.
+   *
+   * Thus always causing an exception is an incomplete but
+   * valid implementation
+   *
+   * Check https://github.com/riscv/riscv-isa-manual/issues/961 for more on this
+   */
+   handle_instr_fault(timeout_exc);
+   RETIRE_FAIL
+}
+
 function clause execute WFI() =
-  match cur_privilege {
-    Machine    => { platform_wfi(); RETIRE_SUCCESS },
-    Supervisor => if   mstatus.TW() == 0b1
-                  then { handle_illegal(); RETIRE_FAIL }
-                  else { platform_wfi(); RETIRE_SUCCESS },
-    User       => { handle_illegal(); RETIRE_FAIL }
+  match (cur_privilege, cur_virtualization) {
+    (Machine, _)     => { platform_wfi(); RETIRE_SUCCESS },
+    (Supervisor, V0) => if mstatus.TW() == 0b1
+                        then { timeout_wfi(E_Illegal_Instr()) }
+                        else { platform_wfi(); RETIRE_SUCCESS },
+    (Supervisor, V1) => if mstatus.TW() == 0b1
+                        then { timeout_wfi(E_Illegal_Instr()) }
+                        else if hstatus.VTW() == 0b1
+                        then { timeout_wfi(E_Virtual_Instr()) }
+                        else { platform_wfi(); RETIRE_SUCCESS },
+    (User, V0)       => if mstatus.TW() == 0b1
+                        then timeout_wfi(E_Illegal_Instr())
+                        else if haveSupMode()
+                        then timeout_wfi(E_Illegal_Instr())
+                        else { platform_wfi(); RETIRE_SUCCESS },
+/* FIXME: unclear VU-mode wfi semantics
+ *
+ * SPEC: "When TW=0, the WFI instruction may execute in lower privilege modes when not prevented
+ *       for some other reason"
+ *       => stall/nop
+ *
+ * SPEC: "When TW=1, then if WFI is executed in any less-privileged mode, and it does not complete
+ *       within an implementation-specific, bounded time limit, the WFI instruction causes an
+ *       illegal instruction exception"
+ *       => set_timeout & stall/nop
+ *
+ * SPEC: "An implementation may have WFI always raise an illegal instruction exception in less-
+ *       privileged modes when TW=1, ..."
+ *       => set_timeout = trap
+ *
+ * SPEC: WFI "... may raise an illegal instruction exception when TW=1 in mstatus"
+ *       (in accordance with previous points)
+ *
+ * SPEC: "When S-mode is implemented, then executing WFI in U-mode causes an illegal instruction
+ *       exception, unless it completes within an implementation-specific, bounded time limit"
+ *       => set_timeout & stall/nop
+ *
+ * NOTE: S-mode is aways implemented when the hypervisor extension is enabled => exec in VU-mode
+ *       similar to U-mode?
+ *       => 'set_timeout & stall/nop'          vs 'stall/nop'
+*           { timeout_wfi(E_Virtual_Instr()) } vs { platform_wfi(); RETIRE_SUCCESS }
+ *
+ * SPEC: "When VTW=1 (and assuming mstatus.TW=0), an attempt in VS-mode to execute WFI raises a
+ *       virtual instruction exception if the WFI does not complete within an implementation-specific,
+ *       bounded time limit"
+ *       (VS-specific, does not change VU-mode behaviour)
+ *
+ * SPEC: A virtual instruction exception occurs "in VU-mode, attempts to execute WFI when mstatus.TW=0"
+ *       => trap
+ *       (Uncontitional trap seems not logical here, 'set_timeout & stall/nop' makes more sense in my opinion)
+ */
+    (User, V1)       => if mstatus.TW() == 0b1
+                        then { timeout_wfi(E_Illegal_Instr()) }
+                        else { timeout_wfi(E_Virtual_Instr()) },
   }
 
 mapping clause assembly = WFI() <-> "wfi"
