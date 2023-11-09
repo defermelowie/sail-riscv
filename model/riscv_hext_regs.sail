@@ -74,6 +74,12 @@
 register cur_virtualization : Virtualization
 
 /* **************************************************************** */
+/* Machine mode CSRs                                                */
+
+register mtinst : xlenbits
+register mtval2 : xlenbits
+
+/* **************************************************************** */
 /* Hypervisor Status Register                                       */
 
 bitfield Hstatus : xlenbits = {

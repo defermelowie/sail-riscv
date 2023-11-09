@@ -4,14 +4,6 @@
 
 /* ****************************************************************** */
 
-// TODO: hlv.b
-// TODO: hlv.bu
-// TODO: hlv.h
-// TODO: hlv.hu
-// TODO: hlv.w
-// TODO: hlv.wu
-// TODO: hlv.d
-
 union clause ast = HLV : (word_width, bool, regidx, regidx)
 
 mapping clause encdec = HLV(width, is_unsigned, rs1, rd)
@@ -27,15 +19,16 @@ function clause execute(HLV(width, is_unsigned, rs1, rd)) =
     Ext_DataAddr_OK(vaddr) =>
       /* Address could be misaligned */
       if check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
-      /* Address translation en protection should be performed as if V=1 */
+      then { handle_mem_exception(vaddr, None(), E_Load_Addr_Align()); RETIRE_FAIL }
+      /* Address translation and protection should be performed as if V=1 */
       else match translateAddr_pv(vaddr, Read(Data), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+        TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
         TR_Address(paddr, _) => match (width) {
           BYTE   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 1, false, false, false), is_unsigned),
           HALF   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 2, false, false, false), is_unsigned),
           WORD   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 4, false, false, false), is_unsigned),
-          DOUBLE if sizeof(xlen_bytes) >= 8 => process_load(rd, vaddr, mem_read(Read(Data), paddr, 8, false, false, false), is_unsigned),
+          DOUBLE if sizeof(xlen) >= 64 => process_load(rd, vaddr, mem_read(Read(Data), paddr, 8, false, false, false), is_unsigned),
+          _ => report_invalid_width(__FILE__, __LINE__, width, "hlv")
         }
       }
   }
@@ -49,6 +42,54 @@ mapping clause assembly = HLV(width, is_unsigned, rs1, rd)
 // TODO: hsv.h
 // TODO: hsv.w
 // TODO: hsv.d
+
+union clause ast = HSV : (word_width, regidx, regidx)
+
+mapping clause encdec = HSV(width, rs1, rs2)
+  <-> 0b0110 @ size_bits(width) @ 0b1 @ rs2 @ rs1 @ 0b100 @ 0b00000 @ 0b1110011
+
+function clause execute(HSV(width, rs1, rs2)) =
+  /* Extensions can perform additional checks on address validity. */
+  match ext_data_get_addr(rs1, zeros(), Write(Data), width) {
+    Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
+    Ext_DataAddr_OK(vaddr) =>
+      /* Address could be misaligned */
+      if check_misaligned(vaddr, width)
+      then { handle_mem_exception(vaddr, None(), E_SAMO_Addr_Align()); RETIRE_FAIL }
+      /* Address translation and protection should be performed as if V=1 */
+      else match translateAddr_pv(vaddr, Write(Data), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
+        TR_Failure(e, _)    => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+        TR_Address(paddr, _) => {
+          let eares : MemoryOpResult(unit) = match width {
+            BYTE   => mem_write_ea(paddr, 1, false, false, false),
+            HALF   => mem_write_ea(paddr, 2, false, false, false),
+            WORD   => mem_write_ea(paddr, 4, false, false, false),
+            DOUBLE => mem_write_ea(paddr, 8, false, false, false)
+          };
+          match (eares) {
+            MemException(e) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+            MemValue(_) => {
+              let rs2_val = X(rs2);
+              let res : MemoryOpResult(bool) = match (width) {
+                BYTE => mem_write_value(paddr, 1, rs2_val[7..0],  false, false, false),
+                HALF => mem_write_value(paddr, 2, rs2_val[15..0], false, false, false),
+                WORD => mem_write_value(paddr, 4, rs2_val[31..0], false, false, false),
+                DOUBLE if sizeof(xlen) >= 64 => mem_write_value(paddr, 8, rs2_val, false, false, false),
+                _ => report_invalid_width(__FILE__, __LINE__, width, "hsv"),
+              };
+              match (res) {
+                MemValue(true)  => RETIRE_SUCCESS,
+                MemValue(false) => internal_error(__FILE__, __LINE__, "hsv got false from mem_write_value"),
+                MemException(e) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL }
+              }
+            }
+          }
+        },
+      }
+  }
+
+mapping clause assembly = HSV(width, rs1, rs2)
+  <-> "hsv."  ^ size_mnemonic(width) ^ spc() ^ reg_name(rs2) ^ sep() ^ reg_name(rs1)
 
 /* ****************************************************************** */
 

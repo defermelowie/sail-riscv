@@ -427,8 +427,8 @@ function rvfi_trap () = ()
 $endif
 
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
-
-function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits), ext : option(ext_exception))
+/* NOTE: instead of having parameters intr and exc_code, is it possible to have a union of InterruptType and ExceptionType as parameter instead? */
+function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits), info2 : option(xlenbits), ext : option(ext_exception))
                      -> xlenbits = {
   rvfi_trap();
   if   get_config_print_platform()
@@ -452,7 +452,7 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : boo
       /* TODO: Set mstatus(h).GVA when a guest virtual address is written to mtval */
 
       mtval           = tval(info);
-      /* TODO: Write mtval2 */
+      mtval2          = tval(info2); // FIXME: info2 is never set!
       mepc            = pc;
       /* TODO: Write mtinst */
 
@@ -562,7 +562,7 @@ function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl :
       if   get_config_print_platform()
       then print_platform("trapping from " ^ to_str(cur_priv) ^ " (" ^ to_str(cur_virtualization) ^ ") to "
                            ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")" ^ " to handle " ^ to_str(e.trap));
-      trap_handler(del_priv, del_virt, false, exceptionType_to_bits(e.trap), pc, e.excinfo, e.ext)
+      trap_handler(del_priv, del_virt, false, exceptionType_to_bits(e.trap), pc, e.excinfo, e.excinfo2, e.ext)
     },
     (_, CTL_MRET())  => {
       let prev_priv   = cur_privilege;
@@ -650,22 +650,30 @@ function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl :
   }
 }
 
-function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
-  let t : sync_exception = struct { trap    = e,
-                                    excinfo = Some(addr),
-                                    ext     = None() } in
+function handle_mem_exception(addr : xlenbits, gp_addr : option(xlenbits), e : ExceptionType) -> unit = {
+  let info2 : option(xlenbits) = match (gp_addr, e) {
+    (Some(a), E_Fetch_GPage_Fault()) => Some(zero_extend(shiftr(a, 2))),
+    (Some(a), E_Load_GPage_Fault())  => Some(zero_extend(shiftr(a, 2))),
+    (Some(a), E_SAMO_GPage_Fault())  => Some(zero_extend(shiftr(a, 2))),
+    (_, _)                           => None(),
+  };
+  let t : sync_exception = struct { trap     = e,
+                                    excinfo  = Some(addr),
+                                    excinfo2 = info2,
+                                    ext      = None() } in
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
 }
 
 function handle_exception(e: ExceptionType) -> unit = {
-  let t : sync_exception = struct { trap    = e,
-                                    excinfo = None(),
-                                    ext     = None() } in
+  let t : sync_exception = struct { trap     = e,
+                                    excinfo  = None(),
+                                    excinfo2 = None(),
+                                    ext      = None() } in
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
 }
 
 function handle_interrupt(i : InterruptType, del_priv : Privilege, del_virt: Virtualization) -> unit =
-  set_next_pc(trap_handler(del_priv, del_virt, true, interruptType_to_bits(i), PC, None(), None()))
+  set_next_pc(trap_handler(del_priv, del_virt, true, interruptType_to_bits(i), PC, None(), None(), None()))
 
 /* state state initialization */
 

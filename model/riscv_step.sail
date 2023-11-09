@@ -104,7 +104,7 @@ function step(step_no : int) -> bool = {
           },
           /* standard error */
           F_Error(e, addr) => {
-            handle_mem_exception(addr, e);
+            handle_mem_exception(addr, None(), e);
             (RETIRE_FAIL, false)
           },
           /* non-error cases: */

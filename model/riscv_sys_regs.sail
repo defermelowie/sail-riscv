@@ -589,9 +589,7 @@ function pc_alignment_mask() -> xlenbits =
 /* auxiliary exception registers */
 
 register mtval    : xlenbits
-register mtval2   : xlenbits /* Defined by hypervisor extension */
 register mscratch : xlenbits
-register mtinst   : xlenbits /* Defined by hypervisor extension */
 
 /* counters */
 

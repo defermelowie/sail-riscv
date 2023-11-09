@@ -109,13 +109,13 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
               walk39(vaddr, ac, priv, virt, mxr, do_sum, shiftl(zero_extend(pte.PPNi()), PAGESIZE_BITS), level - 1, is_global, ext_ptw)
             } else {
               /* last-level PTE contains a pointer instead of a leaf */
-  /*          print("walk39: last-level pte contains a ptr"); */
+              // print("walk39: last-level pte contains a ptr");
               PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
             }
           } else { /* leaf PTE */
             match checkPTEPermission(ac, priv, mxr, do_sum, pattr, ext_pte, ext_ptw) {
               PTE_Check_Failure(ext_ptw, ext_ptw_fail) => {
-  /*            print("walk39: pte permission check failure"); */
+                // print("walk39: pte permission check failure");
                 PTW_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw)
               },
               PTE_Check_Success(ext_ptw)  => {
@@ -124,20 +124,20 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
                   let mask = shiftl(pte.PPNi() ^ pte.PPNi() ^ zero_extend(0b1), level * SV39_LEVEL_BITS) - 1;
                   if (pte.PPNi() & mask) != zero_extend(0b0) then {
                     /* misaligned superpage mapping */
-  /*                print("walk39: misaligned superpage mapping"); */
+                    // print("walk39: misaligned superpage mapping");
                     PTW_Failure(PTW_Misaligned(), ext_ptw)
                   } else {
                     /* add the appropriate bits of the VPN to the superpage PPN */
                     let ppn = pte.PPNi() | (zero_extend(va.VPNi()) & mask);
-  /*                let res = append(ppn, va.PgOfs());
-                    print("walk39: using superpage: pte.ppn=" ^ BitStr(pte.PPNi())
-                          ^ " ppn=" ^ BitStr(ppn) ^ " res=" ^ BitStr(res)); */
+                    // let res = append(ppn, va.PgOfs());
+                    // print("walk39: using superpage: pte.ppn=" ^ BitStr(pte.PPNi())
+                    //       ^ " ppn=" ^ BitStr(ppn) ^ " res=" ^ BitStr(res));
                     PTW_Success(append(ppn, va.PgOfs()), pte, pte_addr[55 .. 0], level, is_global, ext_ptw)
                   }
                 } else {
                   /* normal leaf PTE */
-  /*              let res = append(pte.PPNi(), va.PgOfs());
-                  print("walk39: pte.ppn=" ^ BitStr(pte.PPNi()) ^ " ppn=" ^ BitStr(pte.PPNi()) ^ " res=" ^ BitStr(res)); */
+                  // let res = append(pte.PPNi(), va.PgOfs());
+                  // print("walk39: pte.ppn=" ^ BitStr(pte.PPNi()) ^ " ppn=" ^ BitStr(pte.PPNi()) ^ " res=" ^ BitStr(res));
                   PTW_Success(append(pte.PPNi(), va.PgOfs()), pte, pte_addr[55 .. 0], level, is_global, ext_ptw)
                 }
               }
@@ -185,9 +185,10 @@ function flush_TLB39(asid, addr) =
 
 val translate39 : (asid64, paddr64, vaddr39, AccessType(ext_access_type), Privilege, Virtualization, bool, bool, nat, ext_ptw) -> TR_Result(paddr64, PTW_Error)
 function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_ptw) = {
+  let v_addr : xlenbits = zero_extend(vAddr); /* Debug cast */
   match lookup_TLB39(asid, vAddr) {
     Some(idx, ent) => {
-/*    print("translate39: TLB39 hit for " ^ BitStr(vAddr)); */
+      // print("translate39: TLB39 hit for " ^ BitStr(v_addr));
       let  pte = Mk_SV39_PTE(ent.pte);
       let  ext_pte = pte.Ext();
       let  pteBits = Mk_PTE_Bits(pte.BITS());

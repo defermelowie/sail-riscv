@@ -196,6 +196,17 @@ union AccessType ('a : Type) = {
   Execute   : unit
 }
 
+val AccessType_to_str : AccessType(ext_access_type) -> string
+function AccessType_to_str(ac) =
+  match ac {
+    Read(_)      => "R",
+    Write(_)     => "W",
+    ReadWrite(_) => "RW",
+    Execute(_)   => "E",
+  }
+
+overload to_str = {AccessType_to_str}
+
 enum word_width = {BYTE, HALF, WORD, DOUBLE}
 
 /* architectural interrupt definitions */

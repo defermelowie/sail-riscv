@@ -128,6 +128,8 @@ function clause ext_read_CSR(0x243) = Some(get_vstval()) /* vstval */
 function clause ext_read_CSR(0x280) = Some(get_vsatp()) /* vsatp */
 
 /* H-ext CSR write handles */
+function clause ext_write_CSR(0x34A, value) = { mtinst = value; Some(mtinst) }
+function clause ext_write_CSR(0x34B, value) = { mtval2 = value; Some(mtval2) }
 function clause ext_write_CSR(0x600, value) = { hstatus = legalize_hstatus(hstatus, value); Some(get_hstatus()) }
 function clause ext_write_CSR(0x602, value) = { hedeleg = legalize_hedeleg(hedeleg, value); Some(get_hedeleg()) }
 // function clause ext_write_CSR(0x680, value) = { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(get_hgatp()) }

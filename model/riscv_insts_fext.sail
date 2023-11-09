@@ -350,7 +350,7 @@ function process_fload64(rd, addr, value) =
   if   sizeof(flen) == 64
   then match value {
          MemValue(result) => { F(rd) = result; RETIRE_SUCCESS },
-         MemException(e)  => { handle_mem_exception(addr, e); RETIRE_FAIL }
+         MemException(e)  => { handle_mem_exception(addr, None(), e); RETIRE_FAIL }
        }
   else {
     /* should not get here */
@@ -362,7 +362,7 @@ val process_fload32 : (regidx, xlenbits, MemoryOpResult(bits(32)))
 function process_fload32(rd, addr, value) =
   match value {
     MemValue(result) => { F(rd) = nan_box(result); RETIRE_SUCCESS },
-    MemException(e)  => { handle_mem_exception(addr, e); RETIRE_FAIL }
+    MemException(e)  => { handle_mem_exception(addr, None(), e); RETIRE_FAIL }
   }
 
 val process_fload16 : (regidx, xlenbits, MemoryOpResult(bits(16)))
@@ -370,7 +370,7 @@ val process_fload16 : (regidx, xlenbits, MemoryOpResult(bits(16)))
 function process_fload16(rd, addr, value) =
   match value {
     MemValue(result) => { F(rd) = nan_box(result); RETIRE_SUCCESS },
-    MemException(e)  => { handle_mem_exception(addr, e); RETIRE_FAIL }
+    MemException(e)  => { handle_mem_exception(addr, None(), e); RETIRE_FAIL }
   }
 
 function clause execute(LOAD_FP(imm, rs1, rd, width)) = {
@@ -381,9 +381,9 @@ function clause execute(LOAD_FP(imm, rs1, rd, width)) = {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
     Ext_DataAddr_OK(vaddr) =>
       if   check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
+      then { handle_mem_exception(vaddr, None(), E_Load_Addr_Align()); RETIRE_FAIL }
       else match translateAddr(vaddr, Read(Data)) {
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+        TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
         TR_Address(addr, _) => {
           let (aq, rl, res) = (false, false, false);
           match (width) {
@@ -435,7 +435,7 @@ function process_fstore(vaddr, value) =
   match value {
     MemValue(true)  => { RETIRE_SUCCESS },
     MemValue(false) => { internal_error(__FILE__, __LINE__, "store got false from mem_write_value") },
-    MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL }
+    MemException(e) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL }
   }
 
 function clause execute (STORE_FP(imm, rs2, rs1, width)) = {
@@ -447,9 +447,9 @@ function clause execute (STORE_FP(imm, rs2, rs1, width)) = {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
     Ext_DataAddr_OK(vaddr) =>
       if   check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, E_SAMO_Addr_Align()); RETIRE_FAIL }
+      then { handle_mem_exception(vaddr, None(), E_SAMO_Addr_Align()); RETIRE_FAIL }
       else match translateAddr(vaddr, Write(Data)) {
-        TR_Failure(e, _)    => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+        TR_Failure(e, _)    => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
         TR_Address(addr, _) => {
           let eares : MemoryOpResult(unit) = match width {
             BYTE   => MemValue () /* bogus placeholder for illegal size */,
@@ -458,7 +458,7 @@ function clause execute (STORE_FP(imm, rs2, rs1, width)) = {
             DOUBLE => mem_write_ea(addr, 8, aq, rl, false)
           };
           match (eares) {
-            MemException(e) => { handle_mem_exception(addr, e); RETIRE_FAIL },
+            MemException(e) => { handle_mem_exception(addr, None(), e); RETIRE_FAIL },
             MemValue(_) => {
               let rs2_val = F(rs2);
               match (width) {

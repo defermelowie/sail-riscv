@@ -133,6 +133,7 @@ function gStageTranslationMode(h, priv, virt) = {
 
 /* (V)S-level address translation dispatcher */
 function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
+  // print("sStageTranslateAddr(ac: " ^ to_str(ac) ^ ", priv: " ^ to_str(effPriv) ^ ", virt: " ^ to_str(effVirt) ^")"); // Debug print
   /* Get relevant internal state */
   let mode : AddressTranslationMode = sStageTranslationMode(effPriv, effVirt);
   let asid = curAsid64(xatp(effVirt));
@@ -152,7 +153,7 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
                       TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
                     }
                else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
-             },
+                            },
     Sv48  => { if   isValidSv48Addr(vAddr)
                then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
@@ -166,6 +167,7 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 
 /* G-level address translation dispatcher */
 function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
+  // print("gStageTranslateAddr(ac: " ^ to_str(ac) ^ ", priv: " ^ to_str(effPriv) ^ ", virt: " ^ to_str(effVirt) ^")"); // Debug print
   /* Get relevant internal state */
   let h = Mk_Hgatp64(hgatp);
   let mode = gStageTranslationMode(h, effPriv, effVirt);
@@ -195,11 +197,13 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 
 /* Translate address for a given Privilege level and Virtualization mode */
 val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
-function translateAddr_pv(vAddr, ac, priv, virt) =
-    match sStageTranslateAddr(vAddr, ac, priv, virt) {
+function translateAddr_pv(vAddr, ac, priv, virt) = {
+  // print("translateAddr_pv(ac: " ^ to_str(ac) ^ ", priv: " ^ to_str(priv) ^ ", virt: " ^ to_str(virt) ^")");
+  match sStageTranslateAddr(vAddr, ac, priv, virt) {
     TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
     TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, priv, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
   }
+}
 
 /* Top-level address translation dispatcher */
 val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)

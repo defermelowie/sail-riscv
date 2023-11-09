@@ -504,9 +504,10 @@ function handle_instr_fault(exc_type: ExceptionType) -> unit = {
   let info = if plat_mtval_has_illegal_inst_bits ()
              then Some(instbits)
              else None();
-  let t : sync_exception = struct { trap    = exc_type,
-                                    excinfo = info,
-                                    ext     = None() };
+  let t : sync_exception = struct { trap     = exc_type,
+                                    excinfo  = info,
+                                    excinfo2 = None(),
+                                    ext      = None() };
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
 }
 
