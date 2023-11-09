@@ -77,7 +77,6 @@ function clause execute(HLVX(width, rs1, rd)) =
 mapping clause assembly = HLVX(width, rs1, rd)
 <-> "hlvx." ^ size_mnemonic(width) ^ "u" ^ spc() ^ reg_name(rd) ^ sep() ^ "(" ^ reg_name(rs1) ^ ")"
 
-
 /* ****************************************************************** */
 
 union clause ast = HSV : (word_width, regidx, regidx)
