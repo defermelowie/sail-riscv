@@ -179,8 +179,12 @@ function check_CSR_access(csrrw, csrpr, p, v, isWrite) = {
   check_priv & check_RW
 }
 
-function check_TVM_SATP(csr : csreg, p : Privilege) -> bool =
-  not(csr == 0x180 & p == Supervisor & mstatus.TVM() == 0b1)
+function check_TVM_SATP(csr : csreg, p : Privilege, v: Virtualization) -> bool =
+  match (p, v) {
+    (Supervisor, V0) => not(csr == 0x180 & mstatus.TVM() == 0b1),
+    (Supervisor, V1) => not(csr == 0x180 & hstatus.VTVM() == 0b1),
+    (_, _)           => true
+  }
 
 function check_Counteren(csr : csreg, p : Privilege) -> bool =
   match(csr, p) {
@@ -220,7 +224,7 @@ function check_seed_CSR (csr : csreg, p : Privilege, isWrite : bool) -> bool = {
 function check_CSR(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
     is_CSR_defined(csr, p)
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, v, isWrite)
-  & check_TVM_SATP(csr, p)
+  & check_TVM_SATP(csr, p, v)
   & check_Counteren(csr, p)
   & check_seed_CSR(csr, p, isWrite)
 

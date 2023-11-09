@@ -225,6 +225,7 @@ function init_hext() -> unit = {
  *   [x] in VU-mode, attempts to access an implemented non-high-half supervisor CSR when the same access (read/write) would be allowed in HS-mode, assuming mstatus.TVM=0;
  *   [ ] in VU-mode, if XLEN=32, attempts to access an implemented high-half supervisor CSR when the same access to the CSR’s low-half
  *       partner would be allowed in HS-mode, assuming mstatus.TVM=0;
+ *   [ ] in VS-mode, attempts to access satp, when hstatus.VTVM=1
  */
 function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
   if v == V0 then false
@@ -234,8 +235,11 @@ function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtuali
       let csr_rw = csr[11..10];
       let csr_p  = csr[9..8];
 
-      if not(isWrite == true & csr_rw== 0b11) & (csr_p <=_u 0b10) /* HS-access allowed? */
+      print("csr_access_raises_virtual_instr: VS-mode, " ^ (if isWrite then "Write" else "Read") ^ ", " ^ csr_name(csr));
+
+      if not(isWrite == true & csr_rw == 0b11) & (csr_p <=_u 0b10) /* HS-access allowed? */
       then match (csr_rw, csr_p) {
+        (_, 0b01) => true,  /* Supervisor CSR accesses from VS-mode that are disabled by CSRs */
         (_, 0b10) => true,  /* Hypervisor or VS CSR accesses from VS-mode */
         (_, _)    => false,
       } else false
