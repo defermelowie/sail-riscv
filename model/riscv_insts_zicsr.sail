@@ -280,7 +280,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) = {
   };
   if not(check_CSR(csr, cur_privilege, cur_virtualization, isWrite))
   then {
-    if haveHExt() & raises_virtual_instr(csr, cur_privilege, cur_virtualization, isWrite)
+    if haveHExt() & csr_access_raises_virtual_instr(csr, cur_privilege, cur_virtualization, isWrite)
     then handle_virtual_instr()
     else handle_illegal();
     RETIRE_FAIL

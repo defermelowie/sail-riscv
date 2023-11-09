@@ -211,6 +211,8 @@ function init_hext() -> unit = {
 
 /* Determine if an illegal CSR access should raise a "virtual instruction exception" instead of an "illegal instruction exception"
  *
+ * TODO: implement rest of the below cases for raising virtual instruction exception
+ *
  * According to the spec. (V20211203 - Section 9.6), this should happen in the following cases:
  *   [ ] in VS-mode, attempts to access a non-high-half counter CSR when the corresponding bit in hcounteren is 0 and the same bit in mcounteren is 1;
  *   [ ] in VS-mode, if XLEN=32, attempts to access a high-half counter CSR when the corresponding bit in hcounteren is 0 and the same bit in mcounteren is 1;
@@ -224,8 +226,7 @@ function init_hext() -> unit = {
  *   [ ] in VU-mode, if XLEN=32, attempts to access an implemented high-half supervisor CSR when the same access to the CSR’s low-half
  *       partner would be allowed in HS-mode, assuming mstatus.TVM=0;
  */
- /* TODO: implement rest of the above cases for raising virtual instruction exception */
-function raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
+function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
   if v == V0 then false
   else match p {
     Machine => internal_error(__FILE__, __LINE__, "illegal privilege mode"),
@@ -251,7 +252,6 @@ function raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isW
       } else false
     },
   }
-
 
 /* Get (v)sapt based on virtualization mode if H-ext is enabled */
 function xatp(effVirt: Virtualization) -> xlenbits =

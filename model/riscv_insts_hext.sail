@@ -2,6 +2,8 @@
 /* ****************************************************************** */
 /* This file specifies the instructions in the 'H' extension.         */
 
+// TODO: check hstatus.HU to check if U-mode access is allowed
+
 /* ****************************************************************** */
 
 union clause ast = HLV : (word_width, bool, regidx, regidx)
@@ -12,6 +14,10 @@ mapping clause encdec = HLV(width, is_unsigned, rs1, rd)
 function clause execute(HLV(width, is_unsigned, rs1, rd)) =
   /* Unsigned loads are only valid for widths strictly less than xlen, signed loads also present for widths equal to xlen */
   if (is_unsigned & word_width_bytes(width) >= sizeof(xlen_bytes)) | (word_width_bytes(width) > sizeof(xlen_bytes))
+  then { handle_illegal(); RETIRE_FAIL }
+  else if (cur_virtualization == V1)
+  then { handle_virtual_instr(); RETIRE_FAIL }
+  else if (cur_privilege == User) & (hstatus.HU() == 0b0)
   then { handle_illegal(); RETIRE_FAIL }
   /* Extensions can perform additional checks on address validity. */
   else match ext_data_get_addr(rs1, zeros(), Read(Data), width) {
@@ -34,14 +40,45 @@ function clause execute(HLV(width, is_unsigned, rs1, rd)) =
   }
 
 mapping clause assembly = HLV(width, is_unsigned, rs1, rd)
-  <-> "hlv." ^ size_mnemonic(width) ^ maybe_u(is_unsigned) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1)
+  <-> "hlv." ^ size_mnemonic(width) ^ maybe_u(is_unsigned) ^ spc() ^ reg_name(rd) ^ sep() ^ "(" ^ reg_name(rs1) ^ ")"
 
 /* ****************************************************************** */
 
-// TODO: hsv.b
-// TODO: hsv.h
-// TODO: hsv.w
-// TODO: hsv.d
+union clause ast = HLVX : (word_width, regidx, regidx)
+
+mapping clause encdec = HLVX(width, rs1, rd)
+  <-> 0b0110 @ size_bits(width) @ 0b0 @ 0b00011 @ rs1 @ 0b100 @ rd @ 0b1110011
+
+function clause execute(HLVX(width, rs1, rd)) =
+  if (cur_virtualization == V1)
+  then { handle_virtual_instr(); RETIRE_FAIL }
+  else if (cur_privilege == User) & (hstatus.HU() == 0b0)
+  then { handle_illegal(); RETIRE_FAIL }
+  /* Extensions can perform additional checks on address validity. */
+  else match ext_data_get_addr(rs1, zeros(), Read(Data), width) {
+    Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
+    Ext_DataAddr_OK(vaddr) =>
+      /* Address could be misaligned */
+      if check_misaligned(vaddr, width)
+      then { handle_mem_exception(vaddr, None(), E_Load_Addr_Align()); RETIRE_FAIL }
+      /* Address translation and protection should be performed as for an instruction fetch while V=1 */
+      else match translateAddr_pv(vaddr, Execute(), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
+        /* Update exception's access type because HLVX should raise load exceptions but translateAddr may return fetch exceptions */
+        TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), exceptionType_update_AccessType(e, Read(Data))); RETIRE_FAIL },
+        TR_Address(paddr, _) => match (width) {
+          /* AccessType is Read since HLVX should not override pmp */
+          HALF   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 2, false, false, false), true),
+          WORD   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 4, false, false, false), true),
+          _ => report_invalid_width(__FILE__, __LINE__, width, "hlvx")
+        }
+      }
+  }
+
+mapping clause assembly = HLVX(width, rs1, rd)
+<-> "hlvx." ^ size_mnemonic(width) ^ "u" ^ spc() ^ reg_name(rd) ^ sep() ^ "(" ^ reg_name(rs1) ^ ")"
+
+
+/* ****************************************************************** */
 
 union clause ast = HSV : (word_width, regidx, regidx)
 
@@ -49,8 +86,14 @@ mapping clause encdec = HSV(width, rs1, rs2)
   <-> 0b0110 @ size_bits(width) @ 0b1 @ rs2 @ rs1 @ 0b100 @ 0b00000 @ 0b1110011
 
 function clause execute(HSV(width, rs1, rs2)) =
+  if word_width_bytes(width) > sizeof(xlen_bytes)
+  then { handle_illegal(); RETIRE_FAIL }
+  else if (cur_virtualization == V1)
+  then { handle_virtual_instr(); RETIRE_FAIL }
+  else if (cur_privilege == User) & (hstatus.HU() == 0b0)
+  then { handle_illegal(); RETIRE_FAIL }
   /* Extensions can perform additional checks on address validity. */
-  match ext_data_get_addr(rs1, zeros(), Write(Data), width) {
+  else match ext_data_get_addr(rs1, zeros(), Write(Data), width) {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
     Ext_DataAddr_OK(vaddr) =>
       /* Address could be misaligned */
@@ -89,12 +132,7 @@ function clause execute(HSV(width, rs1, rs2)) =
   }
 
 mapping clause assembly = HSV(width, rs1, rs2)
-  <-> "hsv."  ^ size_mnemonic(width) ^ spc() ^ reg_name(rs2) ^ sep() ^ reg_name(rs1)
-
-/* ****************************************************************** */
-
-// TODO: hlvx.hu
-// TODO: hlvx.wu
+  <-> "hsv."  ^ size_mnemonic(width) ^ spc() ^ reg_name(rs2) ^ sep() ^ "(" ^ reg_name(rs1) ^ ")"
 
 /* ****************************************************************** */
 
