@@ -260,6 +260,7 @@ function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtuali
 /* Get (v)sapt based on virtualization mode if H-ext is enabled */
 function xatp(effVirt: Virtualization) -> xlenbits =
   match (effVirt, haveHExt()) {
-    (V1, true) => vsatp,
-    (_, _)     => satp
+    (V1, true)  => vsatp,
+    (V1, false) => internal_error(__FILE__, __LINE__, "illegal virtualization mode"),
+    (V0, _)     => satp
   }

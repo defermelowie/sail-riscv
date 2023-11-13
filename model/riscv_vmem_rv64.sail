@@ -133,14 +133,14 @@ function gStageTranslationMode(h, priv, virt) = {
 
 /* (V)S-level address translation dispatcher */
 function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
-  // print("sStageTranslateAddr(ac: " ^ to_str(ac) ^ ", priv: " ^ to_str(effPriv) ^ ", virt: " ^ to_str(effVirt) ^")"); // Debug print
   /* Get relevant internal state */
   let mode : AddressTranslationMode = sStageTranslationMode(effPriv, effVirt);
   let asid = curAsid64(xatp(effVirt));
   let ptb  = curPTB64(xatp(effVirt));
   let mxr : bool = if (effVirt == V0) then mstatus.MXR() == 0b1 else (vsstatus.MXR() == 0b1 | mstatus.MXR() == 0b1);
   let sum : bool = if (effVirt == V0) then mstatus.SUM() == 0b1 else vsstatus.SUM() == 0b1;
-
+  // Debug print statement
+  print("[DEBUG] S-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
   /* PTW extensions: initialize the PTW extension state. */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
@@ -167,7 +167,6 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 
 /* G-level address translation dispatcher */
 function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
-  // print("gStageTranslateAddr(ac: " ^ to_str(ac) ^ ", priv: " ^ to_str(effPriv) ^ ", virt: " ^ to_str(effVirt) ^")"); // Debug print
   /* Get relevant internal state */
   let h = Mk_Hgatp64(hgatp);
   let mode = gStageTranslationMode(h, effPriv, effVirt);
@@ -175,7 +174,8 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   let ptb : paddr64 = shiftl(zero_extend(h.PPN()), PAGESIZE_BITS);
   let mxr : bool = mstatus.MXR() == 0b1;
   let sum : bool = mstatus.SUM() == 0b1;
-
+  // Debug print statement
+  print("[DEBUG] G-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
   /* Initialize the PTW extension state */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
@@ -198,10 +198,10 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 /* Translate address for a given Privilege level and Virtualization mode */
 val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr_pv(vAddr, ac, priv, virt) = {
-  // print("translateAddr_pv(ac: " ^ to_str(ac) ^ ", priv: " ^ to_str(priv) ^ ", virt: " ^ to_str(virt) ^")");
+    // print("[DEBUG] AT(hgatp: " ^ BitStr(hgatp) ^ ", satp: " ^ BitStr(satp) ^ ", vsatp: " ^ BitStr(vsatp) ^")");
   match sStageTranslateAddr(vAddr, ac, priv, virt) {
     TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
-    TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, priv, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
+    TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, User, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
   }
 }
 
@@ -216,6 +216,8 @@ function translateAddr(vAddr, ac) = {
 
 val flush_TLB : (option(xlenbits), option(xlenbits)) -> unit
 function flush_TLB(asid_xlen, addr_xlen) -> unit = {
+  if get_config_print_mem()
+  then print_mem("mem: TLB flush");
   /* Flush both Sv39 and Sv48 TLBs. */
   let (addr39, addr48) : (option(vaddr39), option(vaddr48)) =
     match addr_xlen {

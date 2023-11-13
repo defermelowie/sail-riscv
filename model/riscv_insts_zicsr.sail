@@ -241,7 +241,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
                   },
     (0x102,  _) => { sedeleg = legalize_sedeleg(sedeleg, value); Some(sedeleg.bits()) },
     (0x103,  _) => { sideleg->bits() = value; Some(sideleg.bits()) }, /* TODO: does this need legalization? */
-    (0x104,  _) => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) }, /* TODO: set vsie when V=1 */
+    (0x104,  _) => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) }, /* FIXME: set vsie when V=1 */
     (0x105,  _) => { Some(set_trap_vector(Supervisor, cur_virtualization, value)) },
     (0x106,  _) => { scounteren = legalize_scounteren(scounteren, value); Some(zero_extend(scounteren.bits())) },
     (0x140,  _) => match cur_virtualization {
@@ -257,9 +257,11 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
                     V0 => { stval = value; Some(stval) },
                     V1 => { vstval = value; Some(vstval) }
                   },
-    (0x144,  _) => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) }, /* TODO: set vsip when V=1 */
-    (0x180,  _) => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) }, /* TODO: set vsatp when V=1 */
-
+    (0x144,  _) => { mip = legalize_sip(mip, mideleg, value); Some(mip.bits()) }, /* FIXME: set vsip when V=1 */
+    (0x180,  _) => match cur_virtualization {
+                    V0 => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) },
+                    V1 => { vsatp = legalize_satp(cur_Architecture(), vsatp, value); Some(vsatp) },
+    },
     /* user mode: seed (entropy source). writes are ignored */
     (0x015,  _) => write_seed_csr(),
 
