@@ -450,6 +450,12 @@ function trapCause_to_bits(t) = match t {
   E(e) => exceptionType_to_bits(e),
 }
 
+val trapCause_is_interrupt : TrapCause -> bool
+function trapCause_is_interrupt(t) = match t {
+  I(_) => true,
+  _    => false,
+}
+
 val trapCause_to_str : TrapCause -> string
 function trapCause_to_str(t) = match t {
   I(i) => interruptType_to_str(i),

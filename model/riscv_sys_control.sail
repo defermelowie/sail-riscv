@@ -431,7 +431,6 @@ function rvfi_trap () = ()
 $endif
 
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
-/* NOTE: instead of having parameters intr and exc_code, is it possible to have a union of InterruptType and ExceptionType as parameter instead? */
 function trap_handler(del_priv : Privilege, del_virt: Virtualization, cause : TrapCause, pc : xlenbits, info : option(xlenbits), info2 : option(xlenbits), ext : option(ext_exception))
                      -> xlenbits = {
   rvfi_trap();
@@ -445,7 +444,7 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, cause : Tr
 
   match (del_priv) {
     Machine => {
-      mcause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+      mcause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
       mcause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
       mstatus->MPIE() = mstatus.MIE();
@@ -477,7 +476,7 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, cause : Tr
       V0 => {
         assert (haveSupMode(), "no supervisor mode present for delegation");
 
-        scause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+        scause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
         scause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
         mstatus->SPIE() = mstatus.SIE();
@@ -510,7 +509,7 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, cause : Tr
       V1 => {
         assert (haveSupMode() & haveHExt(), "no virtual supervisor mode present for delegation");
 
-        vscause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+        vscause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
         vscause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
         vsstatus->SPIE() = mstatus.SIE();
@@ -538,7 +537,7 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, cause : Tr
     User => {
        assert(haveUsrMode(), "no user mode present for delegation");
 
-       ucause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+       ucause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
        ucause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
        mstatus->UPIE() = mstatus.UIE();
