@@ -432,20 +432,21 @@ $endif
 
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
 /* NOTE: instead of having parameters intr and exc_code, is it possible to have a union of InterruptType and ExceptionType as parameter instead? */
-function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : bool, c : exc_code, pc : xlenbits, info : option(xlenbits), info2 : option(xlenbits), ext : option(ext_exception))
+function trap_handler(del_priv : Privilege, del_virt: Virtualization, cause : TrapCause, pc : xlenbits, info : option(xlenbits), info2 : option(xlenbits), ext : option(ext_exception))
                      -> xlenbits = {
   rvfi_trap();
+
   if   get_config_print_platform()
-  then print_platform("handling " ^ (if intr then "int#" else "exc#")
-                      ^ BitStr(c) ^ " at priv " ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")"
+  then print_platform("handling " ^ trapCause_to_str(cause)
+                      ^ " at priv " ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")"
                       ^ " with tval " ^ BitStr(tval(info)));
 
   cancel_reservation();
 
   match (del_priv) {
     Machine => {
-      mcause->IsInterrupt() = bool_to_bits(intr);
-      mcause->Cause()       = zero_extend(c);
+      mcause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+      mcause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
       mstatus->MPIE() = mstatus.MIE();
       mstatus->MIE()  = 0b0;
@@ -476,8 +477,8 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : boo
       V0 => {
         assert (haveSupMode(), "no supervisor mode present for delegation");
 
-        scause->IsInterrupt() = bool_to_bits(intr);
-        scause->Cause()       = zero_extend(c);
+        scause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+        scause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
         mstatus->SPIE() = mstatus.SIE();
         mstatus->SIE()  = 0b0;
@@ -509,8 +510,8 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : boo
       V1 => {
         assert (haveSupMode() & haveHExt(), "no virtual supervisor mode present for delegation");
 
-        vscause->IsInterrupt() = bool_to_bits(intr);
-        vscause->Cause()       = zero_extend(c);
+        vscause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+        vscause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
         vsstatus->SPIE() = mstatus.SIE();
         vsstatus->SIE()  = 0b0;
@@ -537,8 +538,8 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : boo
     User => {
        assert(haveUsrMode(), "no user mode present for delegation");
 
-       ucause->IsInterrupt() = bool_to_bits(intr);
-       ucause->Cause()       = zero_extend(c);
+       ucause->IsInterrupt() = let i : bool = match cause { I(_) => true, _ => false } in bool_to_bits(i);
+       ucause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
        mstatus->UPIE() = mstatus.UIE();
        mstatus->UIE()  = 0b0;
@@ -558,15 +559,14 @@ function trap_handler(del_priv : Privilege, del_virt: Virtualization, intr : boo
   };
 }
 
-function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl : ctl_result,
-                           pc: xlenbits) -> xlenbits = {
+function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl : ctl_result, pc: xlenbits) -> xlenbits = {
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e)) => {
       let (del_priv, del_virt) = exception_delegatee(e.trap, cur_privilege, cur_virtualization);
       if   get_config_print_platform()
       then print_platform("trapping from " ^ to_str(cur_priv) ^ " (" ^ to_str(cur_virtualization) ^ ") to "
                            ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")" ^ " to handle " ^ to_str(e.trap));
-      trap_handler(del_priv, del_virt, false, exceptionType_to_bits(e.trap), pc, e.excinfo, e.excinfo2, e.ext)
+      trap_handler(del_priv, del_virt, E(e.trap), pc, e.excinfo, e.excinfo2, e.ext)
     },
     (_, CTL_MRET())  => {
       let prev_priv   = cur_privilege;
@@ -677,7 +677,7 @@ function handle_exception(e: ExceptionType) -> unit = {
 }
 
 function handle_interrupt(i : InterruptType, del_priv : Privilege, del_virt: Virtualization) -> unit =
-  set_next_pc(trap_handler(del_priv, del_virt, true, interruptType_to_bits(i), PC, None(), None(), None()))
+  set_next_pc(trap_handler(del_priv, del_virt, I(i), PC, None(), None(), None()))
 
 /* state state initialization */
 
