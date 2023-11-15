@@ -119,7 +119,7 @@ val process_loadres : forall 'n, 0 < 'n <= xlen_bytes. (regidx, xlenbits, Memory
 function process_loadres(rd, addr, value, is_unsigned) =
   match extend_value(is_unsigned, value) {
     MemValue(result) => { load_reservation(addr); X(rd) = result; RETIRE_SUCCESS },
-    MemException(e)  => { handle_mem_exception(addr, None(), e); RETIRE_FAIL }
+    MemException(e)  => { handle_mem_exception(addr, e); RETIRE_FAIL }
   }
 
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) = {
@@ -144,9 +144,9 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) = {
          * - Andrew Waterman, isa-dev, 10 Jul 2018.
          */
         if not(aligned)
-        then { handle_mem_exception(vaddr, None(), E_Load_Addr_Align()); RETIRE_FAIL }
+        then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
         else match translateAddr(vaddr, Read(Data)) {
-               TR_Failure(e, _)    => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+               TR_Failure(e, _)    => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
                TR_Address(addr, _) =>
                  match (width, sizeof(xlen)) {
                    (BYTE, _)    => process_loadres(rd, vaddr, mem_read(Read(Data), addr, 1, aq, aq & rl, true), false),
@@ -202,7 +202,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
               DOUBLE => vaddr[2..0] == 0b000
             };
           if not(aligned)
-          then { handle_mem_exception(vaddr, None(), E_SAMO_Addr_Align()); RETIRE_FAIL }
+          then { handle_mem_exception(vaddr, E_SAMO_Addr_Align()); RETIRE_FAIL }
           else {
             if match_reservation(vaddr) == false then {
               /* cannot happen in rmem */
@@ -210,7 +210,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
             } else {
               match translateAddr(vaddr, Write(Data)) {  /* Write and ReadWrite are equivalent here:
                                                           * both result in a SAMO exception */
-                TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+                TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
                 TR_Address(addr, _) => {
                   let eares : MemoryOpResult(unit) = match (width, sizeof(xlen)) {
                     (BYTE, _)    => mem_write_ea(addr, 1, aq & rl, rl, true),
@@ -220,7 +220,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
                     _            => internal_error(__FILE__, __LINE__, "STORECON expected word or double")
                   };
                   match (eares) {
-                    MemException(e) => { handle_mem_exception(addr, None(), e); RETIRE_FAIL },
+                    MemException(e) => { handle_mem_exception(addr, e); RETIRE_FAIL },
                     MemValue(_) => {
                       rs2_val = X(rs2);
                       let res : MemoryOpResult(bool) = match (width, sizeof(xlen)) {
@@ -233,7 +233,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
                       match (res) {
                         MemValue(true)  => { X(rd) = zero_extend(0b0); cancel_reservation(); RETIRE_SUCCESS },
                         MemValue(false) => { X(rd) = zero_extend(0b1); cancel_reservation(); RETIRE_SUCCESS },
-                        MemException(e) => { handle_mem_exception(addr, None(), e); RETIRE_FAIL }
+                        MemException(e) => { handle_mem_exception(addr, e); RETIRE_FAIL }
                       }
                     }
                   }
@@ -282,7 +282,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
       Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
       Ext_DataAddr_OK(vaddr) => {
         match translateAddr(vaddr, ReadWrite(Data, Data)) {
-          TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+          TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
           TR_Address(addr, _) => {
             let eares : MemoryOpResult(unit) = match (width, sizeof(xlen)) {
               (BYTE, _)    => mem_write_ea(addr, 1, aq & rl, rl, true),
@@ -303,7 +303,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
               DOUBLE => X(rs2)
             };
             match (eares) {
-              MemException(e) => { handle_mem_exception(addr, None(), e); RETIRE_FAIL },
+              MemException(e) => { handle_mem_exception(addr, e); RETIRE_FAIL },
               MemValue(_) => {
                 let mval : MemoryOpResult(xlenbits) = match (width, sizeof(xlen)) {
                   (BYTE, _)    => extend_value(is_unsigned, mem_read(ReadWrite(Data, Data), addr, 1, aq, aq & rl, true)),
@@ -313,7 +313,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
                   _            => internal_error(__FILE__, __LINE__, "Unexpected AMO width")
                 };
                 match (mval) {
-                  MemException(e)  => { handle_mem_exception(addr, None(), e); RETIRE_FAIL },
+                  MemException(e)  => { handle_mem_exception(addr, e); RETIRE_FAIL },
                   MemValue(loaded) => {
                     let result : xlenbits =
                       match op {
@@ -347,7 +347,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
                     match (wval) {
                       MemValue(true)  => { X(rd) = rval; RETIRE_SUCCESS },
                       MemValue(false) => { internal_error(__FILE__, __LINE__, "AMO got false from mem_write_value") },
-                      MemException(e) => { handle_mem_exception(addr, None(), e); RETIRE_FAIL }
+                      MemException(e) => { handle_mem_exception(addr, e); RETIRE_FAIL }
                     }
                   }
                 }

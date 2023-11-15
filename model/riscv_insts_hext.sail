@@ -2,8 +2,6 @@
 /* ****************************************************************** */
 /* This file specifies the instructions in the 'H' extension.         */
 
-// TODO: check hstatus.HU to check if U-mode access is allowed
-
 /* ****************************************************************** */
 
 union clause ast = HLV : (word_width, bool, regidx, regidx)
@@ -25,10 +23,10 @@ function clause execute(HLV(width, is_unsigned, rs1, rd)) =
     Ext_DataAddr_OK(vaddr) =>
       /* Address could be misaligned */
       if check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, None(), E_Load_Addr_Align()); RETIRE_FAIL }
+      then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
       /* Address translation and protection should be performed as if V=1 */
       else match translateAddr_pv(vaddr, Read(Data), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+        TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
         TR_Address(paddr, _) => match (width) {
           BYTE   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 1, false, false, false), is_unsigned),
           HALF   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 2, false, false, false), is_unsigned),
@@ -60,11 +58,11 @@ function clause execute(HLVX(width, rs1, rd)) =
     Ext_DataAddr_OK(vaddr) =>
       /* Address could be misaligned */
       if check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, None(), E_Load_Addr_Align()); RETIRE_FAIL }
+      then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
       /* Address translation and protection should be performed as for an instruction fetch while V=1 */
       else match translateAddr_pv(vaddr, Execute(), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
         /* Update exception's access type because HLVX should raise load exceptions but translateAddr may return fetch exceptions */
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), exceptionType_update_AccessType(e, Read(Data))); RETIRE_FAIL },
+        TR_Failure(e, _) => { handle_mem_exception(vaddr, exceptionType_update_AccessType(e, Read(Data))); RETIRE_FAIL },
         TR_Address(paddr, _) => match (width) {
           /* AccessType is Read since HLVX should not override pmp */
           HALF   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 2, false, false, false), true),
@@ -97,10 +95,10 @@ function clause execute(HSV(width, rs1, rs2)) =
     Ext_DataAddr_OK(vaddr) =>
       /* Address could be misaligned */
       if check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, None(), E_SAMO_Addr_Align()); RETIRE_FAIL }
+      then { handle_mem_exception(vaddr, E_SAMO_Addr_Align()); RETIRE_FAIL }
       /* Address translation and protection should be performed as if V=1 */
       else match translateAddr_pv(vaddr, Write(Data), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
-        TR_Failure(e, _)    => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+        TR_Failure(e, _)    => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
         TR_Address(paddr, _) => {
           let eares : MemoryOpResult(unit) = match width {
             BYTE   => mem_write_ea(paddr, 1, false, false, false),
@@ -109,7 +107,7 @@ function clause execute(HSV(width, rs1, rs2)) =
             DOUBLE => mem_write_ea(paddr, 8, false, false, false)
           };
           match (eares) {
-            MemException(e) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+            MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
             MemValue(_) => {
               let rs2_val = X(rs2);
               let res : MemoryOpResult(bool) = match (width) {
@@ -122,7 +120,7 @@ function clause execute(HSV(width, rs1, rs2)) =
               match (res) {
                 MemValue(true)  => RETIRE_SUCCESS,
                 MemValue(false) => internal_error(__FILE__, __LINE__, "hsv got false from mem_write_value"),
-                MemException(e) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL }
+                MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL }
               }
             }
           }
@@ -182,3 +180,52 @@ mapping clause assembly = HFENCE_GVMA(rs1, rs2)
   <-> "hfence.gvma" ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
 
 /* ****************************************************************** */
+/* Transformed instruction mappings                                   */
+
+// NOTE: Should enc_transformed be implemented here since it originates from H-ext or next to the relevant instruction definitions?
+
+function clause enc_transformed(LOAD(_, _, rd, uns, size, _, _), addr_offset) =
+  0b0000000 @ 0b00000 @ addr_offset @ bool_bits(uns) @ size_bits(size) @ rd @ 0b0000011
+
+function clause enc_transformed(C_LW(_, _, rd), addr_offset) = {
+  let expanded_inst = LOAD(zeros(), zeros(), 0b01 @ rd, false, WORD, false, false);
+  let transformed_inst = enc_transformed(expanded_inst, addr_offset);
+  print("instruction_transform(c.lw, " ^ BitStr([transformed_inst with 1 = bitzero]) ^ ")");
+  [transformed_inst with 1 = bitzero] /* Set transformed_inst[1] to 0b0 */
+}
+
+function clause enc_transformed(C_LD(_, _, rd), addr_offset) = {
+  let expanded_inst = LOAD(zeros(), zeros(), 0b01 @ rd, false, DOUBLE, false, false);
+  let transformed_inst = enc_transformed(expanded_inst, addr_offset);
+  print("instruction_transform(c.ld, " ^ BitStr([transformed_inst with 1 = bitzero]) ^ ")");
+  [transformed_inst with 1 = bitzero] /* Set transformed_inst[1] to 0b0 */
+}
+
+function clause enc_transformed(LOAD_FP(_, _, rd, size), addr_offset) =
+  0b0000000 @ 0b00000 @ addr_offset @ 0b0 @ size_bits(size) @ rd @ 0b0000111
+
+function clause enc_transformed(STORE(_, rs2, _, size, _, _), addr_offset) =
+  0b0000000 @ rs2 @ addr_offset @ 0b0 @ size_bits(size) @ 0b00000 @ 0b0100011
+
+// TODO: compressed stores
+
+function clause enc_transformed(STORE_FP(_, rs2, _, size), addr_offset) =
+  0b0000000 @ rs2 @ addr_offset @ 0b0 @ size_bits(size) @ 0b00000 @ 0b0100111
+
+function clause enc_transformed(LOADRES(aq, rl, _, size, rd), addr_offset) =
+  0b00010 @ bool_bits(aq) @ bool_bits(rl) @ 0b00000 @ addr_offset @ 0b0 @ size_bits(size) @ rd @ 0b0101111
+
+function clause enc_transformed(STORECON(aq, rl, rs2, _, size, rd), addr_offset) =
+  0b00011 @ bool_bits(aq) @ bool_bits(rl) @ rs2 @ addr_offset @ 0b0 @ size_bits(size) @ rd @ 0b0101111
+
+function clause enc_transformed(AMO(op, aq, rl, rs2, _, size, rd), addr_offset) =
+  encdec_amoop(op) @ bool_bits(aq) @ bool_bits(rl) @ rs2 @ addr_offset @ 0b0 @ size_bits(size) @ rd @ 0b0101111
+
+function clause enc_transformed(HLV(width, is_unsigned, _, rd), addr_offset) =
+  0b0110 @ size_bits(width) @ 0b0 @ 0b0000 @ bool_bits(is_unsigned) @ addr_offset @ 0b100 @ rd @ 0b1110011
+
+function clause enc_transformed(HSV(width, _, rs2), addr_offset) =
+  0b0110 @ size_bits(width) @ 0b1 @ rs2 @ addr_offset @ 0b100 @ 0b00000 @ 0b1110011
+
+function clause enc_transformed(HLVX(width, _, rd), addr_offset) =
+  0b0110 @ size_bits(width) @ 0b0 @ 0b00011 @ addr_offset @ 0b100 @ rd @ 0b1110011

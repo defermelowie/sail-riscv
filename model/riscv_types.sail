@@ -82,6 +82,9 @@ let xlen_min_signed = 0 - 2 ^ (sizeof(xlen) - 1)
 type half = bits(16)
 type word = bits(32)
 
+/* max instruction length */
+type ilenbits = bits(32)
+
 /* register identifiers */
 
 type regidx  = bits(5)

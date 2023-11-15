@@ -126,6 +126,7 @@ static struct option options[] = {
     {"disable-fdext",               no_argument,       0, 'F'             },
     {"disable-hext",                no_argument,       0, 'H'             },
     {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'             },
+    {"xtinst-has-transformed-inst", no_argument,       0, 'f'             },
     {"device-tree-blob",            required_argument, 0, 'b'             },
     {"terminal-log",                required_argument, 0, 't'             },
     {"show-times",                  required_argument, 0, 'p'             },
@@ -243,6 +244,7 @@ char *process_args(int argc, char **argv)
                     "F"
                     "H"
                     "i"
+                    "f"
                     "s"
                     "p"
                     "z:"
@@ -302,6 +304,12 @@ char *process_args(int argc, char **argv)
     case 'i':
       fprintf(stderr, "enabling storing illegal instruction bits in mtval.\n");
       rv_mtval_has_illegal_inst_bits = true;
+      break;
+    case 'f':
+      fprintf(stderr,
+              "enabling storing transformed instruction bits in mtinst and "
+              "htinst.\n");
+      rv_xtinst_has_transformed_inst = true;
       break;
     case 's':
       do_dump_dts = true;

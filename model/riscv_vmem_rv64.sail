@@ -140,7 +140,7 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   let mxr : bool = if (effVirt == V0) then mstatus.MXR() == 0b1 else (vsstatus.MXR() == 0b1 | mstatus.MXR() == 0b1);
   let sum : bool = if (effVirt == V0) then mstatus.SUM() == 0b1 else vsstatus.SUM() == 0b1;
   // Debug print statement
-  print("[DEBUG] S-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
+  // print("[DEBUG] S-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
   /* PTW extensions: initialize the PTW extension state. */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
@@ -175,7 +175,7 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   let mxr : bool = mstatus.MXR() == 0b1;
   let sum : bool = mstatus.SUM() == 0b1;
   // Debug print statement
-  print("[DEBUG] G-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
+  // print("[DEBUG] G-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
   /* Initialize the PTW extension state */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
