@@ -190,14 +190,12 @@ function clause enc_transformed(LOAD(_, _, rd, uns, size, _, _), addr_offset) =
 function clause enc_transformed(C_LW(_, _, rd), addr_offset) = {
   let expanded_inst = LOAD(zeros(), zeros(), 0b01 @ rd, false, WORD, false, false);
   let transformed_inst = enc_transformed(expanded_inst, addr_offset);
-  print("instruction_transform(c.lw, " ^ BitStr([transformed_inst with 1 = bitzero]) ^ ")");
   [transformed_inst with 1 = bitzero] /* Set transformed_inst[1] to 0b0 */
 }
 
 function clause enc_transformed(C_LD(_, _, rd), addr_offset) = {
   let expanded_inst = LOAD(zeros(), zeros(), 0b01 @ rd, false, DOUBLE, false, false);
   let transformed_inst = enc_transformed(expanded_inst, addr_offset);
-  print("instruction_transform(c.ld, " ^ BitStr([transformed_inst with 1 = bitzero]) ^ ")");
   [transformed_inst with 1 = bitzero] /* Set transformed_inst[1] to 0b0 */
 }
 
@@ -207,7 +205,16 @@ function clause enc_transformed(LOAD_FP(_, _, rd, size), addr_offset) =
 function clause enc_transformed(STORE(_, rs2, _, size, _, _), addr_offset) =
   0b0000000 @ rs2 @ addr_offset @ 0b0 @ size_bits(size) @ 0b00000 @ 0b0100011
 
-// TODO: compressed stores
+function clause enc_transformed(C_SW(_, _, rs2), addr_offset) = {
+  let expanded_inst = STORE(zeros(), 0b01 @ rs2, zeros(), WORD, false, false);
+  let transformed_inst = enc_transformed(expanded_inst, addr_offset);
+  [transformed_inst with 1 = bitzero] /* Set transformed_inst[1] to 0b0 */
+}
+function clause enc_transformed(C_SD(_, _, rs2), addr_offset) = {
+  let expanded_inst = STORE(zeros(), 0b01 @ rs2, zeros(), DOUBLE, false, false);
+  let transformed_inst = enc_transformed(expanded_inst, addr_offset);
+  [transformed_inst with 1 = bitzero] /* Set transformed_inst[1] to 0b0 */
+}
 
 function clause enc_transformed(STORE_FP(_, rs2, _, size), addr_offset) =
   0b0000000 @ rs2 @ addr_offset @ 0b0 @ size_bits(size) @ 0b00000 @ 0b0100111
