@@ -688,6 +688,28 @@ function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
 }
 
+function handle_addr_trans_exception(v_addr : xlenbits, gp_addr : option(xlenbits), pseudoinst : option(ilenbits), implicit : bool, e: ExceptionType) -> unit =
+  let t : sync_exception = struct {
+    trap     = e,
+    excinfo  = Some(v_addr),
+    excinfo2 = match (gp_addr, e) {
+      (Some(gpa), E_Fetch_GPage_Fault()) => Some(zero_extend(shiftr(gpa, 2))),
+      (Some(gpa), E_Load_GPage_Fault())  => Some(zero_extend(shiftr(gpa, 2))),
+      (Some(gpa), E_SAMO_GPage_Fault())  => Some(zero_extend(shiftr(gpa, 2))),
+      (_, _)                             => None(),
+    },
+    excinst = None(), // Updated below when t.excinfo2 is available
+    ext     = None()
+  } in
+  let t = {t with excinst = match (t.excinfo2, implicit, pseudoinst) {
+    (Some(_), true, Some(spi)) => Some(zero_extend(spi)),
+    (Some(_), true, None())    => internal_error(__FILE__, __LINE__, "Pseudoinstruction is required but not provided"),
+    (_, _, _)                  => if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
+                                  then Some(zero_extend(instbits_transformed))
+                                  else None(),
+  }} in
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
+
 function handle_exception(e: ExceptionType) -> unit = {
   let t : sync_exception = struct { trap     = e,
                                     excinfo  = None(),
