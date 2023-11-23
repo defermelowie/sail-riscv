@@ -77,7 +77,7 @@ union PTW_Error = {
   PTW_No_Permission    : unit,
   PTW_Misaligned       : unit,          /* misaligned superpage */
   PTW_PTE_Update       : unit,          /* PTE update needed but not enabled */
-  PTW_G_Stage_Error    : ExceptionType, /* used to forward G-stage errors caused by accessing VS-stage page tables */
+  PTW_G_Stage_Error    : ExceptionType, /* used to forward G-stage errors caused by implicit access of VS-stage page tables */
   PTW_Ext_Error        : ext_ptw_error  /* parameterized for errors from extensions */
 }
 
@@ -90,7 +90,7 @@ function ptw_error_to_str(e) =
     PTW_No_Permission()     => "no-permission",
     PTW_Misaligned()        => "misaligned-superpage",
     PTW_PTE_Update()        => "pte-update-needed",
-    PTW_G_Stage_Error(e)    => "g-stage-error",
+    PTW_G_Stage_Error(_)    => "g-stage-error",
     PTW_Ext_Error(e)        => "extension-error"
   }
 
@@ -111,7 +111,7 @@ function sStageTranslationException(a : AccessType(ext_access_type), f : PTW_Err
   let e : ExceptionType =
   match (a, f) {
       (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
-      (_, PTW_G_Stage_Error(e))    => exceptionType_update_AccessType(e, a),
+      (ac, PTW_G_Stage_Error(e))   => exceptionType_update_AccessType(e, ac),
       (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
       (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
       (Read(_), PTW_Access())      => E_Load_Access_Fault(),

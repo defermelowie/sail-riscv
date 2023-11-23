@@ -154,13 +154,13 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
                     }
                else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
                             },
-    Sv48  => { if   isValidSv48Addr(vAddr)
-               then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
-                      TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
-                    }
-               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
-             },
+    // Sv48  => { if   isValidSv48Addr(vAddr)
+    //            then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
+    //                   TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
+    //                   TR_Failure(f, ext_ptw)  => TR_Failure((sStageTranslationException(ac, f), None()), ext_ptw)
+    //                 }
+    //            else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
+    //          },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
 }
@@ -198,7 +198,6 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 /* Translate address for a given Privilege level and Virtualization mode */
 val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr_pv(vAddr, ac, priv, virt) = {
-    // print("[DEBUG] AT(hgatp: " ^ BitStr(hgatp) ^ ", satp: " ^ BitStr(satp) ^ ", vsatp: " ^ BitStr(vsatp) ^")");
   match sStageTranslateAddr(vAddr, ac, priv, virt) {
     TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
     TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, User, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
@@ -206,7 +205,6 @@ function translateAddr_pv(vAddr, ac, priv, virt) = {
 }
 
 /* Top-level address translation dispatcher */
-val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr(vAddr, ac) = {
   let effPriv = effectivePrivilege(ac, mstatus, cur_privilege);
   let effVirt = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
