@@ -186,7 +186,11 @@ function flush_TLB39(asid, addr) =
 val translate39 : (asid64, paddr64, vaddr39, AccessType(ext_access_type), Privilege, Virtualization, bool, bool, nat, ext_ptw) -> TR_Result(paddr64, PTW_Error)
 function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_ptw) = {
   let v_addr : xlenbits = zero_extend(vAddr); /* Debug cast */
-  match lookup_TLB39(asid, vAddr) {
+  let tlb_res : option((nat, TLB39_Entry)) = match virt {
+    V0 => lookup_TLB39(asid, vAddr),
+    V1 => None(), // FIXME: better scheme to prevent the load of S-stage TLB entries during VS-stage AT
+  };
+  match tlb_res {
     Some(idx, ent) => {
       // print("translate39: TLB39 hit for " ^ BitStr(v_addr));
       let  pte = Mk_SV39_PTE(ent.pte);
@@ -227,7 +231,7 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
         PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
           match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, pte.Ext()) {
             None() => {
-              add_to_TLB39(asid, vAddr, pAddr, pte, pteAddr, level, global);
+              if virt == V0 then add_to_TLB39(asid, vAddr, pAddr, pte, pteAddr, level, global); // FIXME: better scheme to prevent the saving of VS-stage TLB entries to S-stage TLB
               TR_Address(pAddr, ext_ptw)
             },
             Some(pbits, ext) =>
