@@ -164,6 +164,8 @@ mapping clause csr_name_map = 0x341  <-> "mepc"
 mapping clause csr_name_map = 0x342  <-> "mcause"
 mapping clause csr_name_map = 0x343  <-> "mtval"
 mapping clause csr_name_map = 0x344  <-> "mip"
+mapping clause csr_name_map = 0x34B  <-> "mtval2"
+mapping clause csr_name_map = 0x34A  <-> "mtinst"
 /* machine protection and translation */
 mapping clause csr_name_map = 0x3A0  <-> "pmpcfg0"
 mapping clause csr_name_map = 0x3A1  <-> "pmpcfg1"

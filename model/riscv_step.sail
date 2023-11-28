@@ -90,7 +90,7 @@ function step(step_no : int) -> bool = {
       Some(intr, priv) => {
         if   get_config_print_instr()
         then print_bits("Handling interrupt: ", interruptType_to_bits(intr));
-        handle_interrupt(intr, priv, V0); /* TODO: review the use of V0 here */
+        handle_interrupt(intr, priv, V0); /* FIXME: Not all interrupts are V0 probably */
         (RETIRE_FAIL, false)
       },
       None() => {
@@ -104,13 +104,14 @@ function step(step_no : int) -> bool = {
           },
           /* standard error */
           F_Error(e, addr) => {
-            handle_mem_exception(addr, None(), e);
+            handle_mem_exception(addr, e);
             (RETIRE_FAIL, false)
           },
           /* non-error cases: */
           F_RVC(h) => {
             instbits = zero_extend(h);
             let ast = ext_decode_compressed(h);
+            instbits_transformed = enc_transformed(ast, zeros()); // FIXME: Set correct address offset for transformed instructions
             if   get_config_print_instr()
             then {
               print_instr("[" ^ string_of_int(step_no) ^ "] [" ^ to_str(cur_privilege, cur_virtualization) ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") " ^ to_str(ast));
@@ -127,6 +128,7 @@ function step(step_no : int) -> bool = {
           F_Base(w) => {
             instbits = zero_extend(w);
             let ast = ext_decode(w);
+            instbits_transformed = enc_transformed(ast, zeros()); // FIXME: Set correct address offset for transformed instructions
             if   get_config_print_instr()
             then {
               print_instr("[" ^ string_of_int(step_no) ^ "] [" ^ to_str(cur_privilege, cur_virtualization) ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ to_str(ast));

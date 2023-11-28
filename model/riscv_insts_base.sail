@@ -131,7 +131,7 @@ function clause execute (RISCV_JAL(imm, rd)) = {
       /* Perform standard alignment check */
       if bit_to_bool(target[1]) & not(haveRVC())
       then {
-        handle_mem_exception(target, None(), E_Fetch_Addr_Align());
+        handle_mem_exception(target, E_Fetch_Addr_Align());
         RETIRE_FAIL
       } else {
         X(rd) = get_next_pc();
@@ -194,7 +194,7 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) = {
       },
       Ext_ControlAddr_OK(target) => {
         if bit_to_bool(target[1]) & not(haveRVC()) then {
-          handle_mem_exception(target, None(), E_Fetch_Addr_Align());
+          handle_mem_exception(target, E_Fetch_Addr_Align());
           RETIRE_FAIL;
         } else {
           set_next_pc(target);
@@ -372,7 +372,7 @@ val process_load : forall 'n, 0 < 'n <= xlen_bytes. (regidx, xlenbits, MemoryOpR
 function process_load(rd, vaddr, value, is_unsigned) =
   match extend_value(is_unsigned, value) {
     MemValue(result) => { X(rd) = result; RETIRE_SUCCESS },
-    MemException(e)  => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL }
+    MemException(e)  => { handle_mem_exception(vaddr, e); RETIRE_FAIL }
   }
 
 function check_misaligned(vaddr : xlenbits, width : word_width) -> bool =
@@ -392,9 +392,9 @@ function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) = {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
     Ext_DataAddr_OK(vaddr) =>
       if   check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, None(), E_Load_Addr_Align()); RETIRE_FAIL }
+      then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
       else match translateAddr(vaddr, Read(Data)) {
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+        TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
         TR_Address(paddr, _) =>
           match (width) {
             BYTE =>
@@ -448,9 +448,9 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) = {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
     Ext_DataAddr_OK(vaddr) =>
       if   check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, None(), E_SAMO_Addr_Align()); RETIRE_FAIL }
+      then { handle_mem_exception(vaddr, E_SAMO_Addr_Align()); RETIRE_FAIL }
       else match translateAddr(vaddr, Write(Data)) {
-        TR_Failure(e, _)    => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+        TR_Failure(e, _)    => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
         TR_Address(paddr, _) => {
           let eares : MemoryOpResult(unit) = match width {
             BYTE   => mem_write_ea(paddr, 1, aq, rl, false),
@@ -459,7 +459,7 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) = {
             DOUBLE => mem_write_ea(paddr, 8, aq, rl, false)
           };
           match (eares) {
-            MemException(e) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL },
+            MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
             MemValue(_) => {
               let rs2_val = X(rs2);
               let res : MemoryOpResult(bool) = match (width) {
@@ -473,7 +473,7 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) = {
               match (res) {
                 MemValue(true)  => RETIRE_SUCCESS,
                 MemValue(false) => internal_error(__FILE__, __LINE__, "store got false from mem_write_value"),
-                MemException(e) => { handle_mem_exception(vaddr, None(), e); RETIRE_FAIL }
+                MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL }
               }
             }
           }
@@ -777,6 +777,7 @@ function clause execute ECALL() = {
                     },
              excinfo  = (None() : option(xlenbits)),
              excinfo2 = (None() : option(xlenbits)),
+             excinst  = None(),
              ext      = None() };
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC));
   RETIRE_FAIL
@@ -843,7 +844,7 @@ mapping clause encdec = EBREAK()
   <-> 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute EBREAK() = {
-  handle_mem_exception(PC, None(), E_Breakpoint());
+  handle_mem_exception(PC, E_Breakpoint());
   RETIRE_FAIL
 }
 

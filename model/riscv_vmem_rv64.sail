@@ -140,7 +140,7 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   let mxr : bool = if (effVirt == V0) then mstatus.MXR() == 0b1 else (vsstatus.MXR() == 0b1 | mstatus.MXR() == 0b1);
   let sum : bool = if (effVirt == V0) then mstatus.SUM() == 0b1 else vsstatus.SUM() == 0b1;
   // Debug print statement
-  print("[DEBUG] S-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
+  // print("[DEBUG] S-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
   /* PTW extensions: initialize the PTW extension state. */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
@@ -154,13 +154,13 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
                     }
                else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
                             },
-    Sv48  => { if   isValidSv48Addr(vAddr)
-               then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
-                      TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
-                    }
-               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
-             },
+    // Sv48  => { if   isValidSv48Addr(vAddr)
+    //            then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
+    //                   TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
+    //                   TR_Failure(f, ext_ptw)  => TR_Failure((sStageTranslationException(ac, f), None()), ext_ptw)
+    //                 }
+    //            else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
+    //          },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
 }
@@ -175,7 +175,7 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   let mxr : bool = mstatus.MXR() == 0b1;
   let sum : bool = mstatus.SUM() == 0b1;
   // Debug print statement
-  print("[DEBUG] G-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
+  // print("[DEBUG] G-stage AT(ac: " ^ to_str(ac) ^ ", " ^ to_str(effPriv, effVirt) ^ "-mode, " ^ to_str(mode) ^")");
   /* Initialize the PTW extension state */
   let ext_ptw : ext_ptw = init_ext_ptw;
 
@@ -197,6 +197,7 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 
 /* Translate address for a given Privilege level and Virtualization mode */
 val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+
 function translateAddr_pv(vAddr, ac, priv, virt) =
   match sStageTranslateAddr(vAddr, ac, priv, virt) {
     TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
@@ -204,7 +205,6 @@ function translateAddr_pv(vAddr, ac, priv, virt) =
   }
 
 /* Top-level address translation dispatcher */
-val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr(vAddr, ac) = {
   let effPriv = effectivePrivilege(ac, mstatus, cur_privilege);
   let effVirt = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
