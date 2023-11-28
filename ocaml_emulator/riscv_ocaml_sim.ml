@@ -53,7 +53,7 @@ let options = Arg.align ([("-dump-dts",
                           ("-mtval-has-illegal-inst-bits",
                            Arg.Set P.config_mtval_has_illegal_inst_bits,
                            " mtval stores instruction bits on an illegal instruction exception");
-                          ("-xtinst_has_transformed_inst",
+                          ("-xtinst-has-transformed-inst",
                            Arg.Set P.config_xtinst_has_transformed_inst,
                            " xtinst stores tranformed instruction bits");
                           ("-disable-rvc",
