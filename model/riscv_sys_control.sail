@@ -411,15 +411,6 @@ union ctl_result = {
   CTL_URET : unit
 }
 
-/* trap value */
-
-function tval(excinfo : option(xlenbits)) -> xlenbits = {
-  match (excinfo) {
-    Some(e) => e,
-    None()  => zero_extend(0b0)
-  }
-}
-
 /* Is it legal for mtinst or htinst to hold a tranformed instruction on a given fault */
 function exc_causes_transformed_inst_in_xtinst(e : ExceptionType) -> bool =
   match e {
@@ -450,13 +441,14 @@ $endif
 
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
 val trap_handler : (Privilege, Virtualization, TrapCause, xlenbits, option(xlenbits), option(xlenbits), option(xlenbits), option(ext_exception)) -> xlenbits
-function trap_handler(del_priv, del_virt, cause, pc, info, info2, tinst, ext) = {
+function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
   rvfi_trap();
 
   if   get_config_print_platform()
   then print_platform("handling " ^ trapCause_to_str(cause)
-                      ^ " at priv " ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")"
-                      ^ " with tval " ^ BitStr(tval(info)));
+                      ^ " at priv " ^ to_str(del_priv, del_virt)
+                      ^ " with tval " ^ BitStr(some_or_zero(info))
+                      ^ " and tinst " ^ BitStr(some_or_zero(inst)));
 
   cancel_reservation();
 
@@ -473,10 +465,10 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, tinst, ext) = 
       else mstatus = set_mstatus_MPV(mstatus, virtMode_to_bits(cur_virtualization));
       /* TODO: Set mstatus(h).GVA when a guest virtual address is written to mtval */
 
-      mtval           = tval(info);
-      mtval2          = tval(info2); // FIXME: info2 is never set!
+      mtval           = some_or_zero(info);
+      mtval2          = some_or_zero(info2);
       mepc            = pc;
-      mtinst          = some_or_zero(tinst);
+      mtinst          = some_or_zero(inst);
 
       cur_privilege   = del_priv;
       cur_virtualization = del_virt;
@@ -509,10 +501,10 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, tinst, ext) = 
         if cur_virtualization == V1 then hstatus->SPVP() = mstatus.SPP();
         /* TODO: Set hstatus.GVA when a guest virtual address is written to stval */
 
-        stval           = tval(info);
-        htval           = tval(info2);
+        stval           = some_or_zero(info);
+        htval           = some_or_zero(info2);
         sepc            = pc;
-        htinst          = some_or_zero(tinst);
+        htinst          = some_or_zero(inst);
 
         cur_privilege   = del_priv;
         cur_virtualization = del_virt;
@@ -538,7 +530,7 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, tinst, ext) = 
           Machine => internal_error(__FILE__, __LINE__, "invalid privilege for vs-mode trap")
         };
 
-        vstval = tval(info);
+        vstval = some_or_zero(info);
         vsepc  = pc;
 
         cur_privilege   = del_priv;
@@ -560,7 +552,7 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, tinst, ext) = 
 
        mstatus->UPIE() = mstatus.UIE();
        mstatus->UIE()  = 0b0;
-       utval           = tval(info);
+       utval           = some_or_zero(info);
        uepc            = pc;
 
        cur_privilege   = del_priv;
