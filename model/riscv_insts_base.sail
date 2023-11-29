@@ -505,44 +505,6 @@ mapping clause assembly = ADDIW(imm, rs1, rd)
       if sizeof(xlen) == 64
 
 /* ****************************************************************** */
-union clause ast = SHIFTW : (bits(5), regidx, regidx, sop)
-
-mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SLLI)
-      if sizeof(xlen) == 64
-  <-> 0b0000000 @ shamt @ rs1 @ 0b001 @ rd @ 0b0011011
-      if sizeof(xlen) == 64
-mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRLI)
-      if sizeof(xlen) == 64
-  <-> 0b0000000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
-      if sizeof(xlen) == 64
-mapping clause encdec = SHIFTW(shamt, rs1, rd, RISCV_SRAI)
-      if sizeof(xlen) == 64
-  <-> 0b0100000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
-      if sizeof(xlen) == 64
-
-function clause execute (SHIFTW(shamt, rs1, rd, op)) = {
-  let rs1_val = (X(rs1))[31..0];
-  let result : bits(32) = match op {
-    RISCV_SLLI => rs1_val << shamt,
-    RISCV_SRLI => rs1_val >> shamt,
-    RISCV_SRAI => shift_right_arith32(rs1_val, shamt)
-  };
-  X(rd) = sign_extend(result);
-  RETIRE_SUCCESS
-}
-
-mapping shiftw_mnemonic : sop <-> string = {
-  RISCV_SLLI <-> "slli",
-  RISCV_SRLI <-> "srli",
-  RISCV_SRAI <-> "srai"
-}
-
-mapping clause assembly = SHIFTW(shamt, rs1, rd, op)
-      if sizeof(xlen) == 64
-  <-> shiftw_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_5(shamt)
-      if sizeof(xlen) == 64
-
-/* ****************************************************************** */
 union clause ast = RTYPEW : (regidx, regidx, regidx, ropw)
 
 mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_ADDW)
@@ -610,11 +572,11 @@ mapping clause encdec = SHIFTIWOP(shamt, rs1, rd, RISCV_SRAIW)
       if sizeof(xlen) == 64
 
 function clause execute (SHIFTIWOP(shamt, rs1, rd, op)) = {
-  let rs1_val = X(rs1);
+  let rs1_val = (X(rs1))[31..0];
   let result : bits(32) = match op {
-    RISCV_SLLIW => rs1_val[31..0] << shamt,
-    RISCV_SRLIW => rs1_val[31..0] >> shamt,
-    RISCV_SRAIW => shift_right_arith32(rs1_val[31..0], shamt)
+    RISCV_SLLIW => rs1_val << shamt,
+    RISCV_SRLIW => rs1_val >> shamt,
+    RISCV_SRAIW => shift_right_arith32(rs1_val, shamt)
   };
   X(rd) = sign_extend(result);
   RETIRE_SUCCESS
@@ -637,10 +599,22 @@ union clause ast = FENCE : (bits(4), bits(4))
 mapping clause encdec = FENCE(pred, succ)
   <-> 0b0000 @ pred @ succ @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111
 
+function effective_fence_set(set : bits(4), fiom : bool) -> bits(4) = {
+  // The bits are IORW. If FIOM is set then I implies R and O implies W.
+  if fiom then {
+    set[3 .. 2] @ (set[1 .. 0] | set[3 .. 2])
+  } else set
+}
+
 /* For future versions of Sail where barriers can be parameterised */
 $ifdef FEATURE_UNION_BARRIER
 
 function clause execute (FENCE(pred, succ)) = {
+  // If the FIOM bit in menvcfg/senvcfg is set then the I/O bits can imply R/W.
+  let fiom = is_fiom_active();
+  let pred = effective_fence_set(pred, fiom);
+  let succ = effective_fence_set(succ, fiom);
+
   match (pred, succ) {
     (_ : bits(2) @ 0b11, _ : bits(2) @ 0b11) => __barrier(Barrier_RISCV_rw_rw()),
     (_ : bits(2) @ 0b10, _ : bits(2) @ 0b11) => __barrier(Barrier_RISCV_r_rw()),
@@ -664,6 +638,11 @@ function clause execute (FENCE(pred, succ)) = {
 $else
 
 function clause execute (FENCE(pred, succ)) = {
+  // If the FIOM bit in menvcfg/senvcfg is set then the I/O bits can imply R/W.
+  let fiom = is_fiom_active();
+  let pred = effective_fence_set(pred, fiom);
+  let succ = effective_fence_set(succ, fiom);
+
   match (pred, succ) {
     (_ : bits(2) @ 0b11, _ : bits(2) @ 0b11) => __barrier(Barrier_RISCV_rw_rw),
     (_ : bits(2) @ 0b10, _ : bits(2) @ 0b11) => __barrier(Barrier_RISCV_r_rw),

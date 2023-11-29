@@ -50,6 +50,7 @@ const char *RV32ISA = "RV32IMAC";
 #define CSR_MIP 0x344
 
 #define OPT_TRACE_OUTPUT 1000
+#define OPT_ENABLE_WRITABLE_FIOM 1001
 
 static bool do_dump_dts = false;
 static bool do_show_times = false;
@@ -116,45 +117,43 @@ char *sailcov_file = NULL;
 #endif
 
 static struct option options[] = {
-    {"enable-dirty-update",         no_argument,       0, 'd'             },
-    {"enable-misaligned",           no_argument,       0, 'm'             },
-    {"enable-pmp",                  no_argument,       0, 'P'             },
-    {"enable-next",                 no_argument,       0, 'N'             },
-    {"ram-size",                    required_argument, 0, 'z'             },
-    {"disable-compressed",          no_argument,       0, 'C'             },
-    {"disable-writable-misa",       no_argument,       0, 'I'             },
-    {"disable-fdext",               no_argument,       0, 'F'             },
-    {"disable-hext",                no_argument,       0, 'H'             },
-    {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'             },
-    {"device-tree-blob",            required_argument, 0, 'b'             },
-    {"terminal-log",                required_argument, 0, 't'             },
-    {"show-times",                  required_argument, 0, 'p'             },
-    {"report-arch",                 no_argument,       0, 'a'             },
-    {"test-signature",              required_argument, 0, 'T'             },
-    {"signature-granularity",       required_argument, 0, 'g'             },
+    {"enable-dirty-update",         no_argument,       0, 'd'                     },
+    {"enable-misaligned",           no_argument,       0, 'm'                     },
+    {"enable-pmp",                  no_argument,       0, 'P'                     },
+    {"enable-next",                 no_argument,       0, 'N'                     },
+    {"ram-size",                    required_argument, 0, 'z'                     },
+    {"disable-compressed",          no_argument,       0, 'C'                     },
+    {"disable-writable-misa",       no_argument,       0, 'I'                     },
+    {"disable-fdext",               no_argument,       0, 'F'                     },
+    {"disable-hext",                no_argument,       0, 'H'                     },
+    {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'                     },
+    {"device-tree-blob",            required_argument, 0, 'b'                     },
+    {"terminal-log",                required_argument, 0, 't'                     },
+    {"show-times",                  required_argument, 0, 'p'                     },
+    {"report-arch",                 no_argument,       0, 'a'                     },
+    {"test-signature",              required_argument, 0, 'T'                     },
+    {"signature-granularity",       required_argument, 0, 'g'                     },
 #ifdef RVFI_DII
-    {"rvfi-dii",                    required_argument, 0, 'r'             },
+    {"rvfi-dii",                    required_argument, 0, 'r'                     },
 #endif
-    {"help",                        no_argument,       0, 'h'             },
-    {"trace",                       optional_argument, 0, 'v'             },
-    {"no-trace",                    optional_argument, 0, 'V'             },
-    {"trace-output",                required_argument, 0, OPT_TRACE_OUTPUT},
-    {"inst-limit",                  required_argument, 0, 'l'             },
-    {"enable-zfinx",                no_argument,       0, 'x'             },
+    {"help",                        no_argument,       0, 'h'                     },
+    {"trace",                       optional_argument, 0, 'v'                     },
+    {"no-trace",                    optional_argument, 0, 'V'                     },
+    {"trace-output",                required_argument, 0, OPT_TRACE_OUTPUT        },
+    {"inst-limit",                  required_argument, 0, 'l'                     },
+    {"enable-zfinx",                no_argument,       0, 'x'                     },
+    {"enable-writable-fiom",        no_argument,       0, OPT_ENABLE_WRITABLE_FIOM},
 #ifdef SAILCOV
-    {"sailcov-file",                required_argument, 0, 'c'             },
+    {"sailcov-file",                required_argument, 0, 'c'                     },
 #endif
-    {0,                             0,                 0, 0               }
+    {0,                             0,                 0, 0                       }
 };
 
 static void print_usage(const char *argv0, int ec)
 {
+  fprintf(stdout, "Usage: %s [options] <elf_file> [<elf_file> ...]\n", argv0);
 #ifdef RVFI_DII
-  fprintf(stdout,
-          "Usage: %s [options] <elf_file>\n       %s [options] -r <port>\n",
-          argv0, argv0);
-#else
-  fprintf(stdout, "Usage: %s [options] <elf_file>\n", argv0);
+  fprintf(stdout, "       %s [options] -r <port>\n", argv0);
 #endif
   struct option *opt = options;
   while (opt->name) {
@@ -227,7 +226,14 @@ static void read_dtb(const char *path)
   fprintf(stdout, "Read %zd bytes of DTB from %s.\n", dtb_len, path);
 }
 
-char *process_args(int argc, char **argv)
+/**
+ * Parses the command line arguments and returns the argv index for the first
+ * ELF file that should be loaded. As getopt transforms the argv array, all
+ * argv values following that index are non-options and can be treated as
+ * additional ELF files that should be loaded into memory (but not scanned
+ * for the magic tohost/{begin,end}_signature symbols).
+ */
+static int process_args(int argc, char **argv)
 {
   int c;
   uint64_t ram_size = 0;
@@ -242,6 +248,7 @@ char *process_args(int argc, char **argv)
                     "I"
                     "F"
                     "H"
+                    "W"
                     "i"
                     "s"
                     "p"
@@ -299,9 +306,18 @@ char *process_args(int argc, char **argv)
     case 'H':
       fprintf(stderr, "disabling hypervisor extension.\n");
       rv_enable_hext = false;
+    case 'W':
+      fprintf(stderr, "disabling RVV vector instructions.\n");
+      rv_enable_vext = false;
+      break;
     case 'i':
       fprintf(stderr, "enabling storing illegal instruction bits in mtval.\n");
       rv_mtval_has_illegal_inst_bits = true;
+      break;
+    case OPT_ENABLE_WRITABLE_FIOM:
+      fprintf(stderr,
+              "enabling FIOM (Fence of I/O implies Memory) bit in menvcfg.\n");
+      rv_enable_writable_fiom = true;
       break;
     case 's':
       do_dump_dts = true;
@@ -393,7 +409,7 @@ char *process_args(int argc, char **argv)
   if (!rvfi_dii)
 #endif
     fprintf(stdout, "Running file %s.\n", argv[optind]);
-  return argv[optind];
+  return optind;
 }
 
 void check_elf(bool is32bit)
@@ -412,13 +428,17 @@ void check_elf(bool is32bit)
     }
   }
 }
-uint64_t load_sail(char *f)
+uint64_t load_sail(char *f, bool main_file)
 {
   bool is32bit;
   uint64_t entry;
   uint64_t begin_sig, end_sig;
   load_elf(f, &is32bit, &entry);
   check_elf(is32bit);
+  if (!main_file) {
+    /* Don't scan for test-signature/htif symbols for additional ELF files. */
+    return entry;
+  }
   fprintf(stdout, "ELF Entry @ 0x%" PRIx64 "\n", entry);
   /* locate htif ports */
   if (lookup_sym(f, "tohost", &rv_htif_tohost) < 0) {
@@ -1032,7 +1052,7 @@ void init_logs()
   if (trace_log_path == NULL) {
     trace_log = stdout;
   } else if ((trace_log = fopen(trace_log_path, "w+")) < 0) {
-    fprintf(stderr, "Cannot create trace log '%s': %s\n", trace_log,
+    fprintf(stderr, "Cannot create trace log '%s': %s\n", trace_log_path,
             strerror(errno));
     exit(1);
   }
@@ -1049,7 +1069,8 @@ int main(int argc, char **argv)
   // Initialize model so that we can check or report its architecture.
   preinit_sail();
 
-  char *file = process_args(argc, argv);
+  int files_start = process_args(argc, argv);
+  char *initial_elf_file = argv[files_start];
   init_logs();
 
   if (gettimeofday(&init_start, NULL) < 0) {
@@ -1115,15 +1136,20 @@ int main(int argc, char **argv)
     }
     printf("Connected\n");
   } else
-    entry = load_sail(file);
+    entry = load_sail(initial_elf_file, /*main_file=*/true);
 #else
-  uint64_t entry = load_sail(file);
+  uint64_t entry = load_sail(initial_elf_file, /*main_file=*/true);
 #endif
+  /* Load any additional ELF files into memory */
+  for (int i = files_start + 1; i < argc; i++) {
+    fprintf(stdout, "Loading additional ELF file %s.\n", argv[i]);
+    (void)load_sail(argv[i], /*main_file=*/false);
+  }
 
   /* initialize spike before sail so that we can access the device-tree blob,
    * until we roll our own.
    */
-  init_spike(file, entry, rv_ram_size);
+  init_spike(initial_elf_file, entry, rv_ram_size);
   init_sail(entry);
 
   if (!init_check(s))
