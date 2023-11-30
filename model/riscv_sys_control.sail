@@ -405,7 +405,7 @@ function dispatchInterrupt(priv : Privilege) -> option((InterruptType, Privilege
 /* types of privilege transitions */
 
 union ctl_result = {
-  CTL_TRAP : sync_exception,
+  CTL_TRAP : (ExceptionType, ExceptionContext),
   CTL_SRET : unit,
   CTL_MRET : unit,
   CTL_URET : unit
@@ -440,15 +440,15 @@ function rvfi_trap () = ()
 $endif
 
 /* handle exceptional ctl flow by updating nextPC and operating privilege */
-val trap_handler : (Privilege, Virtualization, TrapCause, xlenbits, option(xlenbits), option(xlenbits), option(xlenbits), option(ext_exception)) -> xlenbits
-function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
+val trap_handler : (Privilege, Virtualization, xlenbits, TrapCause, ExceptionContext) -> xlenbits
+function trap_handler(del_priv, del_virt, pc, cause, context) = {
   rvfi_trap();
 
   if   get_config_print_platform()
   then print_platform("handling " ^ trapCause_to_str(cause)
                       ^ " at priv " ^ to_str(del_priv, del_virt)
-                      ^ " with tval " ^ BitStr(some_or_zero(info))
-                      ^ " and tinst " ^ BitStr(some_or_zero(inst)));
+                      ^ " with tval " ^ BitStr(some_or_zero(context.excinfo))
+                      ^ " and tinst " ^ BitStr(some_or_zero(context.excinst)));
 
   cancel_reservation();
 
@@ -456,6 +456,8 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
     Machine => {
       mcause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
       mcause->Cause()       = zero_extend(trapCause_to_bits(cause));
+
+      mepc            = pc;
 
       mstatus->MPIE() = mstatus.MIE();
       mstatus->MIE()  = 0b0;
@@ -465,15 +467,14 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
       else mstatus = set_mstatus_MPV(mstatus, virtMode_to_bits(cur_virtualization));
       /* TODO: Set mstatus(h).GVA when a guest virtual address is written to mtval */
 
-      mtval           = some_or_zero(info);
-      mtval2          = some_or_zero(info2);
-      mepc            = pc;
-      mtinst          = some_or_zero(inst);
+      mtval           = some_or_zero(context.excinfo);
+      mtval2          = some_or_zero(context.excinfo2);
+      mtinst          = some_or_zero(context.excinst);
 
       cur_privilege   = del_priv;
       cur_virtualization = del_virt;
 
-      handle_trap_extension(del_priv, pc, ext);
+      handle_trap_extension(del_priv, pc, context.ext);
 
       if   get_config_print_reg()
       then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
@@ -489,6 +490,8 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
         scause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
         scause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
+        sepc            = pc;
+
         mstatus->SPIE() = mstatus.SIE();
         mstatus->SIE()  = 0b0;
         mstatus->SPP()  = match cur_privilege {
@@ -501,15 +504,14 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
         if cur_virtualization == V1 then hstatus->SPVP() = mstatus.SPP();
         /* TODO: Set hstatus.GVA when a guest virtual address is written to stval */
 
-        stval           = some_or_zero(info);
-        htval           = some_or_zero(info2);
-        sepc            = pc;
-        htinst          = some_or_zero(inst);
+        stval           = some_or_zero(context.excinfo);
+        htval           = some_or_zero(context.excinfo2);
+        htinst          = some_or_zero(context.excinst);
 
         cur_privilege   = del_priv;
         cur_virtualization = del_virt;
 
-        handle_trap_extension(del_priv, pc, ext);
+        handle_trap_extension(del_priv, pc, context.ext);
 
         if   get_config_print_reg()
         then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
@@ -522,6 +524,8 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
         vscause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
         vscause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
+        vsepc  = pc;
+
         vsstatus->SPIE() = mstatus.SIE();
         vsstatus->SIE()  = 0b0;
         vsstatus->SPP()  = match cur_privilege {
@@ -529,14 +533,12 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
           Supervisor => 0b1,
           Machine => internal_error(__FILE__, __LINE__, "invalid privilege for vs-mode trap")
         };
-
-        vstval = some_or_zero(info);
-        vsepc  = pc;
+        vstval = some_or_zero(context.excinfo);
 
         cur_privilege   = del_priv;
         cur_virtualization = del_virt;
 
-        handle_trap_extension(del_priv, pc, ext);
+        handle_trap_extension(del_priv, pc, context.ext);
 
         if   get_config_print_reg()
         then print_reg("CSR vsstatus <- " ^ BitStr(vsstatus.bits()));
@@ -550,15 +552,17 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
        ucause->IsInterrupt() = bool_to_bits(trapCause_is_interrupt(cause));
        ucause->Cause()       = zero_extend(trapCause_to_bits(cause));
 
+       uepc            = pc;
+
        mstatus->UPIE() = mstatus.UIE();
        mstatus->UIE()  = 0b0;
-       utval           = some_or_zero(info);
-       uepc            = pc;
+
+       utval           = some_or_zero(context.excinfo);
 
        cur_privilege   = del_priv;
        cur_virtualization = del_virt;
 
-       handle_trap_extension(del_priv, pc, ext);
+       handle_trap_extension(del_priv, pc, context.ext);
 
        if   get_config_print_reg()
        then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits()));
@@ -570,12 +574,12 @@ function trap_handler(del_priv, del_virt, cause, pc, info, info2, inst, ext) = {
 
 function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl : ctl_result, pc: xlenbits) -> xlenbits = {
   match (cur_priv, ctl) {
-    (_, CTL_TRAP(e)) => {
-      let (del_priv, del_virt) = exception_delegatee(e.trap, cur_privilege, cur_virtualization);
+    (_, CTL_TRAP(e, c)) => {
+      let (del_priv, del_virt) = exception_delegatee(e, cur_privilege, cur_virtualization);
       if   get_config_print_platform()
       then print_platform("trapping from " ^ to_str(cur_priv) ^ " (" ^ to_str(cur_virtualization) ^ ") to "
-                           ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")" ^ " to handle " ^ to_str(e.trap));
-      trap_handler(del_priv, del_virt, E(e.trap), pc, e.excinfo, e.excinfo2, e.excinst, e.ext)
+                           ^ to_str(del_priv) ^ " (" ^ to_str(del_virt) ^ ")" ^ " to handle " ^ to_str(e));
+      trap_handler(del_priv, del_virt, pc, E(e), c)
     },
     (_, CTL_MRET())  => {
       let prev_priv   = cur_privilege;
@@ -664,25 +668,18 @@ function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl :
 }
 
 function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
-  // let info2 : option(xlenbits) = match (gp_addr, e) {
-  //   (Some(a), E_Fetch_GPage_Fault()) => Some(zero_extend(shiftr(a, 2))),
-  //   (Some(a), E_Load_GPage_Fault())  => Some(zero_extend(shiftr(a, 2))),
-  //   (Some(a), E_SAMO_GPage_Fault())  => Some(zero_extend(shiftr(a, 2))),
-  //   (_, _)                           => None(),
-  // };
-  let t : sync_exception = struct { trap     = e,
-                                    excinfo  = Some(addr),
-                                    excinfo2 = None(),
-                                    excinst  = if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
-                                               then Some(zero_extend(instbits_transformed))
-                                               else None(),
-                                    ext      = None() } in
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
+  let c : ExceptionContext = struct { excinfo  = Some(addr),
+                                      excinfo2 = None(),
+                                      excinst  = if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
+                                                 then Some(zero_extend(instbits_transformed))
+                                                 else None(),
+                                      ext      = None() } in
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
+// FIXME: This function is probably not used since it's supposed to be called at a high level where the required data is likely no longer available
 function handle_addr_trans_exception(v_addr : xlenbits, gp_addr : option(xlenbits), pseudoinst : option(ilenbits), implicit : bool, e: ExceptionType) -> unit =
-  let t : sync_exception = struct {
-    trap     = e,
+  let c : ExceptionContext = struct {
     excinfo  = Some(v_addr),
     excinfo2 = match (gp_addr, e) {
       (Some(gpa), E_Fetch_GPage_Fault()) => Some(zero_extend(shiftr(gpa, 2))),
@@ -690,29 +687,26 @@ function handle_addr_trans_exception(v_addr : xlenbits, gp_addr : option(xlenbit
       (Some(gpa), E_SAMO_GPage_Fault())  => Some(zero_extend(shiftr(gpa, 2))),
       (_, _)                             => None(),
     },
-    excinst = None(), // Updated below when t.excinfo2 is available
+    excinst = None(), // Updated below when excinfo2 is available
     ext     = None()
   } in
-  let t = {t with excinst = match (t.excinfo2, implicit, pseudoinst) {
-    (Some(_), true, Some(spi)) => Some(zero_extend(spi)),
-    (Some(_), true, None())    => internal_error(__FILE__, __LINE__, "Pseudoinstruction is required but not provided"),
-    (_, _, _)                  => if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
-                                  then Some(zero_extend(instbits_transformed))
-                                  else None(),
+  let c = {c with excinst = match (c.excinfo2, implicit) {
+    (Some(_), true)  => match pseudoinst {
+                          Some(spi) => Some(zero_extend(spi)),
+                          None()    => internal_error(__FILE__, __LINE__, "Pseudoinstruction is required but not provided"),
+                        },
+    (_, _)           => if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
+                        then Some(zero_extend(instbits_transformed))
+                        else None(),
   }} in
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 
-function handle_exception(e: ExceptionType) -> unit = {
-  let t : sync_exception = struct { trap     = e,
-                                    excinfo  = None(),
-                                    excinfo2 = None(),
-                                    excinst  = None(),
-                                    ext      = None() } in
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
+function handle_exception(e: ExceptionType, c: ExceptionContext) -> unit = {
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
 function handle_interrupt(i : InterruptType, del_priv : Privilege, del_virt: Virtualization) -> unit =
-  set_next_pc(trap_handler(del_priv, del_virt, I(i), PC, None(), None(), None(), None()))
+  set_next_pc(trap_handler(del_priv, del_virt, PC, I(i), empty_exception_context()))
 
 /* state state initialization */
 

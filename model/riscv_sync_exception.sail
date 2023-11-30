@@ -68,12 +68,19 @@
 /*  SUCH DAMAGE.                                                                         */
 /*=======================================================================================*/
 
-/* model context for synchronous exceptions, parameterized for extensions */
+/* model context for synchronous exceptions, parameterized for out-of-tree extensions */
 
-struct sync_exception = {
-  trap     : ExceptionType,
-  excinfo  : option(xlenbits),
-  excinfo2 : option(xlenbits),
-  excinst  : option(xlenbits),
-  ext      : option(ext_exception)   /* for extensions */
+struct ExceptionContext = {
+  excinfo  : option(xlenbits),        /* Faulting address or instruction */
+  excinfo2 : option(xlenbits),        /* H-extension: faulting guest-physical address */
+  excinst  : option(xlenbits),        /* H-extension: transformed instruction or pseudoinstruction */
+  ext      : option(ext_exception)    /* For extensions */
 }
+
+function empty_exception_context() -> ExceptionContext =
+  struct {
+    excinfo  = None(),
+    excinfo2 = None(),
+    excinst  = None(),
+    ext      = None(),
+  }
