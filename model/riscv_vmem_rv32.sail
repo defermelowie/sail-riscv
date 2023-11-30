@@ -112,7 +112,7 @@ function translateAddr_pv(vAddr, ac, priv, virt) = {
     Bare => TR_Address(vAddr, ext_ptw),
     Sv32  => match translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, SV32_LEVELS - 1, ext_ptw) {
                TR_Address(pa, ext_ptw)    => TR_Address(to_phys_addr(pa), ext_ptw),
-               TR_Failure(f, c, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), empty_exception_context(), ext_ptw)
+               TR_Failure(f, c, ext_ptw)  => TR_Failure(f, c, ext_ptw)
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
