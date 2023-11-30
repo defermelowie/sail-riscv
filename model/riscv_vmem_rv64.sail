@@ -150,16 +150,16 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
     Sv39  => { if   isValidSv39Addr(vAddr)
                then match translate39(asid, ptb, vAddr[38 .. 0], ac, effPriv, effVirt, mxr, sum, SV39_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
+                      TR_Failure(e, c, ext_ptw)  => TR_Failure(e, c, ext_ptw)
                     }
-               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
+               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), empty_exception_context(), ext_ptw) // TODO: fill exception context
                             },
     Sv48  => { if   isValidSv48Addr(vAddr)
                then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
-                      TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
-                      TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
+                      TR_Address(pa, ext_ptw)    => TR_Address(zero_extend(pa), ext_ptw),
+                      TR_Failure(e, c, ext_ptw)  => TR_Failure(e, c, ext_ptw)
                     }
-               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
+               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), empty_exception_context(), ext_ptw) // TODO: fill exception context
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
@@ -185,9 +185,9 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
       Sv39x4 => { if isValidSv39x4Addr(vAddr)
                   then match translate39x4(vmid, ptb, vAddr[40 .. 0], ac, mxr, sum, ext_ptw) { /* No effPriv required since "all memory accesses are considered to be user-level accesses" */
                         TR_Address(spa, ext_ptw) => TR_Address(zero_extend(spa), ext_ptw),
-                        TR_Failure(f, ext_ptw)   => TR_Failure(gStageTranslationException(ac, f), ext_ptw)
+                        TR_Failure(e, c, ext_ptw)   => TR_Failure(e, c, ext_ptw)
                       }
-                  else TR_Failure(gStageTranslationException(ac, PTW_Invalid_Addr()), ext_ptw)
+                  else TR_Failure(gStageTranslationException(ac, PTW_Invalid_Addr()), empty_exception_context(), ext_ptw) // TODO: fill exception context
                 },
       Sv48x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv48x4)"), /* TODO: Sv48x4 */
       Sv57x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv57x4)"), /* TODO: Sv57x4 */
@@ -196,11 +196,9 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 }
 
 /* Translate address for a given Privilege level and Virtualization mode */
-val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
-
 function translateAddr_pv(vAddr, ac, priv, virt) =
   match sStageTranslateAddr(vAddr, ac, priv, virt) {
-    TR_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
+    TR_Failure(e, c, ext_ptw) => TR_Failure(e, c, ext_ptw),
     TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, User, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
   }
 

@@ -26,7 +26,7 @@ function clause execute(HLV(width, is_unsigned, rs1, rd)) =
       then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
       /* Address translation and protection should be performed as if V=1 */
       else match translateAddr_pv(vaddr, Read(Data), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+        TR_Failure(e, c, _)  => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
         TR_Address(paddr, _) => match (width) {
           BYTE   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 1, false, false, false), is_unsigned),
           HALF   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 2, false, false, false), is_unsigned),
@@ -62,7 +62,7 @@ function clause execute(HLVX(width, rs1, rd)) =
       /* Address translation and protection should be performed as for an instruction fetch while V=1 */
       else match translateAddr_pv(vaddr, Execute(), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
         /* Update exception's access type because HLVX should raise load exceptions but translateAddr may return fetch exceptions */
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, exceptionType_update_AccessType(e, Read(Data))); RETIRE_FAIL },
+        TR_Failure(e, c, _)  => { handle_mem_exception(vaddr, exceptionType_update_AccessType(e, Read(Data))); RETIRE_FAIL },
         TR_Address(paddr, _) => match (width) {
           /* AccessType is Read since HLVX should not override pmp */
           HALF   => process_load(rd, vaddr, mem_read(Read(Data), paddr, 2, false, false, false), true),
@@ -98,7 +98,7 @@ function clause execute(HSV(width, rs1, rs2)) =
       then { handle_mem_exception(vaddr, E_SAMO_Addr_Align()); RETIRE_FAIL }
       /* Address translation and protection should be performed as if V=1 */
       else match translateAddr_pv(vaddr, Write(Data), privLevel_of_bits(zero_extend(hstatus.SPVP())), V1) {
-        TR_Failure(e, _)    => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+        TR_Failure(e, c, _)  => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
         TR_Address(paddr, _) => {
           let eares : MemoryOpResult(unit) = match width {
             BYTE   => mem_write_ea(paddr, 1, false, false, false),

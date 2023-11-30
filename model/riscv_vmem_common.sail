@@ -290,12 +290,13 @@ union PTW_Result('paddr : Type, 'pte : Type) = {
 
 /* Result of address translation */
 
-union TR_Result('paddr : Type, 'failure : Type) = {
+union TR_Result('paddr : Type) = {
   TR_Address : ('paddr, ext_ptw),
-  TR_Failure : ('failure, ext_ptw)
+  TR_Failure : (ExceptionType, ExceptionContext, ext_ptw)
 }
 
 /* High level address translation */
-val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
-val sStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
-val gStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
+val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits)
+val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits)
+val sStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits)
+val gStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits)

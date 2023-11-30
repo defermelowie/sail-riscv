@@ -77,7 +77,7 @@ function walk39(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
                                 PTE39_LOG_SIZE);
   /* Use G-level translation to access VS-level structures if V=1 */
   match gStageTranslateAddr(zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
-    TR_Failure(f, ext_ptw) => PTW_Failure(PTW_G_Stage_Error(f), ext_ptw),
+    TR_Failure(e, c, ext_ptw) => PTW_Failure(PTW_G_Stage_Error(e), ext_ptw), // TODO: pass exception context
     TR_Address(pte_addr, ext_ptw) => match (mem_read_priv(Read(Data), Supervisor, pte_addr, 8, false, false, false)) {
       MemException(_) => {
         // print("walk39(vaddr=" ^ BitStr(vaddr)
@@ -183,7 +183,7 @@ function flush_TLB39(asid, addr) =
 
 /* address translation */
 
-val translate39 : (asid64, paddr64, vaddr39, AccessType(ext_access_type), Privilege, Virtualization, bool, bool, nat, ext_ptw) -> TR_Result(paddr64, PTW_Error)
+val translate39 : (asid64, paddr64, vaddr39, AccessType(ext_access_type), Privilege, Virtualization, bool, bool, nat, ext_ptw) -> TR_Result(paddr64)
 function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_ptw) = {
   let v_addr : xlenbits = zero_extend(vAddr); /* Debug cast */
   let tlb_res : option((nat, TLB39_Entry)) = match virt {
@@ -197,7 +197,7 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
       let  ext_pte = pte.Ext();
       let  pteBits = Mk_PTE_Bits(pte.BITS());
       match checkPTEPermission(ac, priv, mxr, do_sum, pteBits, ext_pte, ext_ptw) {
-        PTE_Check_Failure(ext_ptw, ext_ptw_fail) => { TR_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw) },
+        PTE_Check_Failure(ext_ptw, ext_ptw_fail) => { TR_Failure(sStageTranslationException(ac, ext_get_ptw_error(ext_ptw_fail)), empty_exception_context(), ext_ptw) }, // TODO:fill exception context
         PTE_Check_Success(ext_ptw) => {
           match update_PTE_Bits(pteBits, ac, ext_pte) {
             None()           => TR_Address(ent.pAddr | zero_extend(vAddr & ent.vAddrMask), ext_ptw),
@@ -205,7 +205,7 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
               if not(plat_enable_dirty_update())
               then {
                 /* pte needs dirty/accessed update but that is not enabled */
-                TR_Failure(PTW_PTE_Update(), ext_ptw)
+                TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
               } else {
                 /* update PTE entry and TLB */
                 n_pte = update_BITS(pte, pbits.bits());
@@ -227,7 +227,7 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
     },
     None() => {
       match walk39(vAddr, ac, priv, virt, mxr, do_sum, ptb, level, false, ext_ptw) {
-        PTW_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
+        PTW_Failure(f, ext_ptw) => TR_Failure(sStageTranslationException(ac, f), empty_exception_context(), ext_ptw), // TODO: Fill exception context
         PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
           match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, pte.Ext()) {
             None() => {
@@ -238,7 +238,7 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
               if not(plat_enable_dirty_update())
               then {
                 /* pte needs dirty/accessed update but that is not enabled */
-                TR_Failure(PTW_PTE_Update(), ext_ptw)
+                TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
               } else {
                 var w_pte : SV39_PTE = update_BITS(pte, pbits.bits());
                 w_pte = update_Ext(w_pte, ext);
@@ -253,7 +253,7 @@ function translate39(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
                     //   ^ " pte=" ^ BitStr(pte.bits())
                     //   ^ " w_pte=" ^ BitStr(w_pte.bits())
                     //   ^ ")");
-                    TR_Failure(PTW_Access(), ext_ptw)
+                    TR_Failure(sStageTranslationException(ac, PTW_Access()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
                   }
                 }
               }

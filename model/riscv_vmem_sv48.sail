@@ -78,7 +78,7 @@ function walk48(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
 
   /* Use G-level translation to access VS-level structures if V=1 */
   match gStageTranslateAddr(zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
-    TR_Failure(f, ext_ptw) => PTW_Failure(PTW_G_Stage_Error(f), ext_ptw),
+    TR_Failure(e, c, ext_ptw) => PTW_Failure(PTW_G_Stage_Error(e), ext_ptw),
     TR_Address(pte_addr, ext_ptw) => match (mem_read_priv(Read(Data), Supervisor, zero_extend(pte_addr), 8, false, false, false)) {
       MemException(_) => {
   /*    print("walk48(vaddr=" ^ BitStr(vaddr) ^ " level=" ^ string_of_int(level)
@@ -183,10 +183,10 @@ function flush_TLB48(asid, addr) =
 
 /* address translation */
 
-val translate48 : (asid64, paddr64, vaddr48, AccessType(ext_access_type), Privilege, Virtualization, bool, bool, nat, ext_ptw) -> TR_Result(paddr64, PTW_Error)
+val translate48 : (asid64, paddr64, vaddr48, AccessType(ext_access_type), Privilege, Virtualization, bool, bool, nat, ext_ptw) -> TR_Result(paddr64)
 function translate48(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_ptw) = {
   match walk48(vAddr, ac, priv, virt, mxr, do_sum, ptb, level, false, ext_ptw) {
-    PTW_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
+    PTW_Failure(f, ext_ptw) => TR_Failure(sStageTranslationException(ac, f), empty_exception_context(), ext_ptw), // TODO: Fill exception context
     PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
       match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, pte.Ext()) {
         None() => {
@@ -197,7 +197,7 @@ function translate48(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
           if not(plat_enable_dirty_update())
           then {
             /* pte needs dirty/accessed update but that is not enabled */
-            TR_Failure(PTW_PTE_Update(), ext_ptw)
+            TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
           } else {
             var w_pte : SV48_PTE = update_BITS(pte, pbits.bits());
             w_pte = update_Ext(w_pte, ext);
@@ -208,7 +208,7 @@ function translate48(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
               },
               MemException(e) => {
                 /* pte is not in valid memory */
-                TR_Failure(PTW_Access(), ext_ptw)
+                TR_Failure(sStageTranslationException(ac, PTW_Access()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
               }
             }
           }

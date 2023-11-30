@@ -154,11 +154,11 @@ register tlb39x4 : option(TLB39x4_Entry)
  *
  * NOTE: vmid is not used but is required for implementing TLBs in the future
  */
-val translate39x4 : (vmid39x4, paddr39x4, vaddr39x4, AccessType(ext_access_type), bool, bool, ext_ptw) -> TR_Result(paddr39x4, PTW_Error)
+val translate39x4 : (vmid39x4, paddr39x4, vaddr39x4, AccessType(ext_access_type), bool, bool, ext_ptw) -> TR_Result(paddr39x4)
 function translate39x4(vmid, ptb, gpa, ac, mxr, sum, ext_ptw) = {
   // TODO: TLB lookup
   match walk39x4(zero_extend(ptb), gpa, ac, mxr, sum, SV39x4_LEVELS - 1, ext_ptw) {
-    PTW_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
+    PTW_Failure(f, ext_ptw) => TR_Failure(gStageTranslationException(ac, f), empty_exception_context(), ext_ptw), // TODO: Fill exception context
     PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
       match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, pte.Ext()) {
         None() => {
@@ -171,7 +171,7 @@ function translate39x4(vmid, ptb, gpa, ac, mxr, sum, ext_ptw) = {
           then {
             /* pte needs dirty/accessed update but that is not enabled */
             // print("Sv39x4: pte bits require update but this is disabled");
-            TR_Failure(PTW_PTE_Update(), ext_ptw)
+            TR_Failure(gStageTranslationException(ac, PTW_PTE_Update()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
           } else {
             var w_pte : SV39_PTE = update_BITS(pte, pbits.bits());
             w_pte = update_Ext(w_pte, ext);
@@ -184,7 +184,7 @@ function translate39x4(vmid, ptb, gpa, ac, mxr, sum, ext_ptw) = {
               MemException(e) => {
                 /* pte is not in valid memory */
                 // print("Sv39x4: pte bits require update but pte address was invalid");
-                TR_Failure(PTW_Access(), ext_ptw)
+                TR_Failure(gStageTranslationException(ac, PTW_Access()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
               }
             }
           }

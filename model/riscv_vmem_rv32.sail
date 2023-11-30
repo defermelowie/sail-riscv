@@ -97,7 +97,6 @@ function translationMode(priv, virt) = {
 
 
 /* Translate address for a given Privilege level and Virtualization mode */
-val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr_pv(vAddr, ac, priv, virt) = {
   let mxr    : bool   = mstatus.MXR() == 0b1;
   let do_sum : bool   = mstatus.SUM() == 0b1;
@@ -112,15 +111,14 @@ function translateAddr_pv(vAddr, ac, priv, virt) = {
   match mode {
     Bare => TR_Address(vAddr, ext_ptw),
     Sv32  => match translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, SV32_LEVELS - 1, ext_ptw) {
-               TR_Address(pa, ext_ptw) => TR_Address(to_phys_addr(pa), ext_ptw),
-               TR_Failure(f, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), ext_ptw)
+               TR_Address(pa, ext_ptw)    => TR_Address(to_phys_addr(pa), ext_ptw),
+               TR_Failure(f, c, ext_ptw)  => TR_Failure(sStageTranslationException(ac, f), empty_exception_context(), ext_ptw)
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
 }
 
 /* Top-level address translation dispatcher */
-val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits, ExceptionType)
 function translateAddr(vAddr, ac) = {
   let effPriv = effectivePrivilege(ac, mstatus, cur_privilege);
   let effVirt = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
