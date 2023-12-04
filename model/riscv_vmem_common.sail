@@ -299,4 +299,4 @@ union TR_Result('paddr : Type) = {
 val translateAddr : (xlenbits, AccessType(ext_access_type)) -> TR_Result(xlenbits)
 val translateAddr_pv : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits)
 val sStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits)
-val gStageTranslateAddr : (xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits)
+val gStageTranslateAddr : (xlenbits, xlenbits, AccessType(ext_access_type), Privilege, Virtualization) -> TR_Result(xlenbits)

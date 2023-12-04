@@ -77,7 +77,7 @@ function walk48(vaddr, ac, priv, virt, mxr, do_sum, ptb, level, global, ext_ptw)
                                 PTE48_LOG_SIZE);
 
   /* Use G-level translation to access VS-level structures if V=1 */
-  match gStageTranslateAddr(zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
+  match gStageTranslateAddr(zero_extend(vaddr), zero_extend(ptb + pt_ofs), Read(Data), User, virt) {
     TR_Failure(e, c, ext_ptw) => PTW_Failure(PTW_G_Stage_Error(e), ext_ptw),
     TR_Address(pte_addr, ext_ptw) => match (mem_read_priv(Read(Data), Supervisor, zero_extend(pte_addr), 8, false, false, false)) {
       MemException(_) => {

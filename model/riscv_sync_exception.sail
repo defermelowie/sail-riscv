@@ -77,7 +77,7 @@ struct ExceptionContext = {
   ext      : option(ext_exception)    /* For extensions */
 }
 
-/* Create context for various exception classes */
+/* Create contexts  for various exception classes */
 
 function empty_exception_context() -> ExceptionContext =
   struct {

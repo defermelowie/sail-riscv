@@ -94,6 +94,7 @@ function is_valid_vaddr(vaddr : xlenbits, mode : AddressTranslationMode) -> bool
     Sv39x4 => vaddr[63 .. 41] == zeros(),
     Sv48x4 => vaddr[63 .. 50] == zeros(),
     Sv57x4 => vaddr[63 .. 59] == zeros(),
+    _      => internal_error(__FILE__, __LINE__, "unsupported address translation mode")
   }
 
 /* Get the (V)S-stage address translation mode from (v)satp */
@@ -170,7 +171,7 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 }
 
 /* G-level address translation dispatcher */
-function gStageTranslateAddr(gpAddr, ac, effPriv, effVirt) = {
+function gStageTranslateAddr(vAddr, gpAddr, ac, effPriv, effVirt) = {
   /* Get relevant internal state */
   let h = Mk_Hgatp64(hgatp);
   let mode = gStageTranslationMode(h, effPriv, effVirt);
@@ -191,7 +192,7 @@ function gStageTranslateAddr(gpAddr, ac, effPriv, effVirt) = {
                         TR_Address(spa, ext_ptw) => TR_Address(zero_extend(spa), ext_ptw),
                         TR_Failure(e, c, ext_ptw)   => TR_Failure(e, c, ext_ptw)
                       }
-                  else TR_Failure(gStageTranslationException(ac, PTW_Invalid_Addr()), vmem_exception_context(zeros(), Some(gpAddr)), ext_ptw) // Fixme: fill exception context
+                  else TR_Failure(gStageTranslationException(ac, PTW_Invalid_Addr()), vmem_exception_context(vAddr, Some(gpAddr)), ext_ptw) // Fixme: fill exception context
                 },
       Sv48x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv48x4)"), /* TODO: Sv48x4 */
       Sv57x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv57x4)"), /* TODO: Sv57x4 */
@@ -203,7 +204,7 @@ function gStageTranslateAddr(gpAddr, ac, effPriv, effVirt) = {
 function translateAddr_pv(vAddr, ac, priv, virt) =
   match sStageTranslateAddr(vAddr, ac, priv, virt) {
     TR_Failure(e, c, ext_ptw) => TR_Failure(e, c, ext_ptw),
-    TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(gpAddr, ac, User, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
+    TR_Address(gpAddr, ext_ptw) => gStageTranslateAddr(vAddr, gpAddr, ac, User, virt)   /* G-stage address translation has no effect (Bare) when V=0 */
   }
 
 /* Top-level address translation dispatcher */
