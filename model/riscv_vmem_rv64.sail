@@ -152,21 +152,21 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
                       TR_Failure(e, c, ext_ptw)  => TR_Failure(e, c, ext_ptw)
                     }
-               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), empty_exception_context(), ext_ptw) // TODO: fill exception context
+               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), vmem_exception_context(vAddr, None()), ext_ptw)
                             },
     Sv48  => { if   isValidSv48Addr(vAddr)
                then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw)    => TR_Address(zero_extend(pa), ext_ptw),
                       TR_Failure(e, c, ext_ptw)  => TR_Failure(e, c, ext_ptw)
                     }
-               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), empty_exception_context(), ext_ptw) // TODO: fill exception context
+               else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), vmem_exception_context(vAddr, None()), ext_ptw)
              },
     _     => internal_error(__FILE__, __LINE__, "unsupported address translation scheme")
   }
 }
 
 /* G-level address translation dispatcher */
-function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
+function gStageTranslateAddr(gpAddr, ac, effPriv, effVirt) = {
   /* Get relevant internal state */
   let h = Mk_Hgatp64(hgatp);
   let mode = gStageTranslationMode(h, effPriv, effVirt);
@@ -181,13 +181,13 @@ function gStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
 
   /* Do G-level address translation */
   match mode {
-      Bare   => TR_Address(vAddr, ext_ptw),
-      Sv39x4 => { if isValidSv39x4Addr(vAddr)
-                  then match translate39x4(vmid, ptb, vAddr[40 .. 0], ac, mxr, sum, ext_ptw) { /* No effPriv required since "all memory accesses are considered to be user-level accesses" */
+      Bare   => TR_Address(gpAddr, ext_ptw),
+      Sv39x4 => { if isValidSv39x4Addr(gpAddr)
+                  then match translate39x4(vmid, ptb, gpAddr[40 .. 0], ac, mxr, sum, ext_ptw) { /* No effPriv required since "all memory accesses are considered to be user-level accesses" */
                         TR_Address(spa, ext_ptw) => TR_Address(zero_extend(spa), ext_ptw),
                         TR_Failure(e, c, ext_ptw)   => TR_Failure(e, c, ext_ptw)
                       }
-                  else TR_Failure(gStageTranslationException(ac, PTW_Invalid_Addr()), empty_exception_context(), ext_ptw) // TODO: fill exception context
+                  else TR_Failure(gStageTranslationException(ac, PTW_Invalid_Addr()), vmem_exception_context(zeros(), Some(gpAddr)), ext_ptw) // Fixme: fill exception context
                 },
       Sv48x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv48x4)"), /* TODO: Sv48x4 */
       Sv57x4 => internal_error(__FILE__, __LINE__, "not yet implemented (Sv57x4)"), /* TODO: Sv57x4 */

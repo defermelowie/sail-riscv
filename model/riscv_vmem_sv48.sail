@@ -186,7 +186,7 @@ function flush_TLB48(asid, addr) =
 val translate48 : (asid64, paddr64, vaddr48, AccessType(ext_access_type), Privilege, Virtualization, bool, bool, nat, ext_ptw) -> TR_Result(paddr64)
 function translate48(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_ptw) = {
   match walk48(vAddr, ac, priv, virt, mxr, do_sum, ptb, level, false, ext_ptw) {
-    PTW_Failure(f, ext_ptw) => TR_Failure(sStageTranslationException(ac, f), empty_exception_context(), ext_ptw), // TODO: Fill exception context
+    PTW_Failure(f, ext_ptw) => TR_Failure(sStageTranslationException(ac, f), mem_exception_context(zero_extend(vAddr)), ext_ptw), // TODO: Fill exception context
     PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
       match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, pte.Ext()) {
         None() => {
@@ -197,7 +197,7 @@ function translate48(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
           if not(plat_enable_dirty_update())
           then {
             /* pte needs dirty/accessed update but that is not enabled */
-            TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
+            TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), mem_exception_context(zero_extend(vAddr)), ext_ptw) // TODO: Fill exception context
           } else {
             var w_pte : SV48_PTE = update_BITS(pte, pbits.bits());
             w_pte = update_Ext(w_pte, ext);
@@ -208,7 +208,7 @@ function translate48(asid, ptb, vAddr, ac, priv, virt, mxr, do_sum, level, ext_p
               },
               MemException(e) => {
                 /* pte is not in valid memory */
-                TR_Failure(sStageTranslationException(ac, PTW_Access()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
+                TR_Failure(sStageTranslationException(ac, PTW_Access()), mem_exception_context(zero_extend(vAddr)), ext_ptw) // TODO: Fill exception context
               }
             }
           }

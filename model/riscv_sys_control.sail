@@ -668,38 +668,35 @@ function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl :
 }
 
 function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
-  let c : ExceptionContext = struct { excinfo  = Some(addr),
-                                      excinfo2 = None(),
-                                      excinst  = if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
-                                                 then Some(zero_extend(instbits_transformed))
-                                                 else None(),
-                                      ext      = None() } in
+  let c = {mem_exception_context(addr) with excinst = if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
+                                                      then Some(zero_extend(instbits_transformed))
+                                                      else None()} in
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
-// FIXME: This function is probably not used since it's supposed to be called at a high level where the required data is likely no longer available
-function handle_addr_trans_exception(v_addr : xlenbits, gp_addr : option(xlenbits), pseudoinst : option(ilenbits), implicit : bool, e: ExceptionType) -> unit =
-  let c : ExceptionContext = struct {
-    excinfo  = Some(v_addr),
-    excinfo2 = match (gp_addr, e) {
-      (Some(gpa), E_Fetch_GPage_Fault()) => Some(zero_extend(shiftr(gpa, 2))),
-      (Some(gpa), E_Load_GPage_Fault())  => Some(zero_extend(shiftr(gpa, 2))),
-      (Some(gpa), E_SAMO_GPage_Fault())  => Some(zero_extend(shiftr(gpa, 2))),
-      (_, _)                             => None(),
-    },
-    excinst = None(), // Updated below when excinfo2 is available
-    ext     = None()
-  } in
-  let c = {c with excinst = match (c.excinfo2, implicit) {
-    (Some(_), true)  => match pseudoinst {
-                          Some(spi) => Some(zero_extend(spi)),
-                          None()    => internal_error(__FILE__, __LINE__, "Pseudoinstruction is required but not provided"),
-                        },
-    (_, _)           => if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
-                        then Some(zero_extend(instbits_transformed))
-                        else None(),
-  }} in
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
+// // This function is never used since it's supposed to be called at a high level where the required data is likely no longer available
+// function handle_addr_trans_exception(v_addr : xlenbits, gp_addr : option(xlenbits), pseudoinst : option(ilenbits), implicit : bool, e: ExceptionType) -> unit =
+//   let c : ExceptionContext = struct {
+//     excinfo  = Some(v_addr),
+//     excinfo2 = match (gp_addr, e) {
+//       (Some(gpa), E_Fetch_GPage_Fault()) => Some(zero_extend(shiftr(gpa, 2))),
+//       (Some(gpa), E_Load_GPage_Fault())  => Some(zero_extend(shiftr(gpa, 2))),
+//       (Some(gpa), E_SAMO_GPage_Fault())  => Some(zero_extend(shiftr(gpa, 2))),
+//       (_, _)                             => None(),
+//     },
+//     excinst = None(), // Updated below when excinfo2 is available
+//     ext     = None()
+//   } in
+//   let c = {c with excinst = match (c.excinfo2, implicit) {
+//     (Some(_), true)  => match pseudoinst {
+//                           Some(spi) => Some(zero_extend(spi)),
+//                           None()    => internal_error(__FILE__, __LINE__, "Pseudoinstruction is required but not provided"),
+//                         },
+//     (_, _)           => if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
+//                         then Some(zero_extend(instbits_transformed))
+//                         else None(),
+//   }} in
+//   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 
 function handle_exception(e: ExceptionType, c: ExceptionContext) -> unit = {
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))

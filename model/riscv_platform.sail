@@ -501,10 +501,7 @@ function tick_platform() -> unit = {
 /* Platform-specific handling of instruction faults */
 
 function handle_instr_fault(e: ExceptionType) -> unit = {
-  let info : option(xlenbits) = if plat_mtval_has_illegal_inst_bits ()
-                                then Some(zero_extend(instbits))
-                                else None();
-  let c = {empty_exception_context() with excinfo = info};
+  let c = instr_exception_context(zero_extend(instbits), plat_mtval_has_illegal_inst_bits()) in
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 

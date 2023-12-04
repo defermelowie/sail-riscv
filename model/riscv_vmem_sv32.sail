@@ -194,7 +194,7 @@ function translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, level, ext_ptw) = 
       let  ext_pte : extPte = zeros(); // no reserved bits for extensions
       let  pteBits = Mk_PTE_Bits(pte.BITS());
       match checkPTEPermission(ac, priv, mxr, do_sum, pteBits, ext_pte, ext_ptw) {
-        PTE_Check_Failure(ext_ptw, ext_ptw_fail) => { TR_Failure(sStageTranslationException(ac, ext_get_ptw_error(ext_ptw_fail)), empty_exception_context(), ext_ptw) }, // TODO: Fill exception context
+        PTE_Check_Failure(ext_ptw, ext_ptw_fail) => { TR_Failure(sStageTranslationException(ac, ext_get_ptw_error(ext_ptw_fail)), mem_exception_context(vAddr), ext_ptw) }, // TODO: Fill exception context
         PTE_Check_Success(ext_ptw) => {
           match update_PTE_Bits(pteBits, ac, ext_pte) {
             None()           => TR_Address(ent.pAddr | zero_extend(vAddr & ent.vAddrMask), ext_ptw),
@@ -202,7 +202,7 @@ function translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, level, ext_ptw) = 
               if not(plat_enable_dirty_update())
               then {
                 /* pte needs dirty/accessed update but that is not enabled */
-                TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), empty_exception_context(), ext_ptw)
+                TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), mem_exception_context(vAddr), ext_ptw)
               } else {
                 /* update PTE entry and TLB */
                 n_pte = update_BITS(pte, pbits.bits());
@@ -224,7 +224,7 @@ function translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, level, ext_ptw) = 
     },
     None() => {
       match walk32(vAddr, ac, priv, mxr, do_sum, ptb, level, false, ext_ptw) {
-        PTW_Failure(f, ext_ptw) => TR_Failure(sStageTranslationException(ac, f), empty_exception_context(), ext_ptw), // TODO: Fill exception context
+        PTW_Failure(f, ext_ptw) => TR_Failure(sStageTranslationException(ac, f), mem_exception_context(vAddr), ext_ptw),
         PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
           match update_PTE_Bits(Mk_PTE_Bits(pte.BITS()), ac, zeros()) {
             None() => {
@@ -235,7 +235,7 @@ function translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, level, ext_ptw) = 
               if not(plat_enable_dirty_update())
               then {
                 /* pte needs dirty/accessed update but that is not enabled */
-                TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
+                TR_Failure(sStageTranslationException(ac, PTW_PTE_Update()), mem_exception_context(vAddr), ext_ptw)
               } else {
                 var w_pte : SV32_PTE = update_BITS(pte, pbits.bits());
                 /* ext is unused since there are no reserved bits for extensions */
@@ -246,7 +246,7 @@ function translate32(asid, ptb, vAddr, ac, priv, mxr, do_sum, level, ext_ptw) = 
                   },
                   MemException(e) => {
                     /* pte is not in valid memory */
-                    TR_Failure(sStageTranslationException(ac, PTW_Access()), empty_exception_context(), ext_ptw) // TODO: Fill exception context
+                    TR_Failure(sStageTranslationException(ac, PTW_Access()), mem_exception_context(vAddr), ext_ptw)
                   }
                 }
               }
