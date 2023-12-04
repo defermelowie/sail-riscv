@@ -86,11 +86,6 @@ bitfield Sv39x4_VAddr : vaddr39x4 = {
   PgOfs : 11 .. 0
 }
 
-/* Check if upper bits are '0' */
-function isValidSv39x4Addr(vAddr: xlenbits) -> bool = {
-  vAddr[63 .. 41] == zeros()
-}
-
 /* Sv39x4 page walk */
 val walk39x4 : (xlenbits, vaddr39x4, AccessType(ext_access_type), bool, bool, nat, ext_ptw) -> PTW_Result(paddr39x4, SV39_PTE)
 function walk39x4(ptb, vAddr, ac, mxr, sum, level, ext_ptw) = {

@@ -79,18 +79,22 @@ function legalize_hgatp(a : Architecture, o : xlenbits, v : xlenbits) -> xlenbit
   legalize_hgatp64(a, o, v)
 
 /* Define valid source addresses for translation */
-
-function isValidSv39Addr(vAddr : xlenbits) -> bool = {
-  vAddr[63 .. 39] == (if   vAddr[38] == bitone
-                      then ones()
-                      else zeros())
-}
-
-function isValidSv48Addr(vAddr : xlenbits) -> bool = {
-  vAddr[63 .. 48] == (if   vAddr[47] == bitone
-                      then ones()
-                      else zeros())
-}
+function is_valid_vaddr(vaddr : xlenbits, mode : AddressTranslationMode) -> bool =
+  match mode {
+    Bare   => internal_error(__FILE__, __LINE__, "check virtual address validity for Bare"),
+    Sv39   => vaddr[63 .. 39] == (if vaddr[38] == bitone
+                                  then ones()
+                                  else zeros()),
+    Sv48   => vaddr[63 .. 48] == (if vaddr[47] == bitone
+                                  then ones()
+                                  else zeros()),
+    Sv57   => vaddr[63 .. 57] == (if vaddr[56] == bitone
+                                  then ones()
+                                  else zeros()),
+    Sv39x4 => vaddr[63 .. 41] == zeros(),
+    Sv48x4 => vaddr[63 .. 50] == zeros(),
+    Sv57x4 => vaddr[63 .. 59] == zeros(),
+  }
 
 /* Get the (V)S-stage address translation mode from (v)satp */
 
@@ -147,14 +151,14 @@ function sStageTranslateAddr(vAddr, ac, effPriv, effVirt) = {
   /* Do (V)S-level address translation */
   match mode {
     Bare => TR_Address(vAddr, ext_ptw),
-    Sv39  => { if   isValidSv39Addr(vAddr)
+    Sv39  => { if   is_valid_vaddr(vAddr, Sv39)
                then match translate39(asid, ptb, vAddr[38 .. 0], ac, effPriv, effVirt, mxr, sum, SV39_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw) => TR_Address(zero_extend(pa), ext_ptw),
                       TR_Failure(e, c, ext_ptw)  => TR_Failure(e, c, ext_ptw)
                     }
                else TR_Failure(sStageTranslationException(ac, PTW_Invalid_Addr()), vmem_exception_context(vAddr, None()), ext_ptw)
                             },
-    Sv48  => { if   isValidSv48Addr(vAddr)
+    Sv48  => { if   is_valid_vaddr(vAddr, Sv48)
                then match translate48(asid, ptb, vAddr[47 .. 0], ac, effPriv, effVirt, mxr, sum, SV48_LEVELS - 1, ext_ptw) {
                       TR_Address(pa, ext_ptw)    => TR_Address(zero_extend(pa), ext_ptw),
                       TR_Failure(e, c, ext_ptw)  => TR_Failure(e, c, ext_ptw)
@@ -182,7 +186,7 @@ function gStageTranslateAddr(gpAddr, ac, effPriv, effVirt) = {
   /* Do G-level address translation */
   match mode {
       Bare   => TR_Address(gpAddr, ext_ptw),
-      Sv39x4 => { if isValidSv39x4Addr(gpAddr)
+      Sv39x4 => { if is_valid_vaddr(gpAddr, Sv39x4)
                   then match translate39x4(vmid, ptb, gpAddr[40 .. 0], ac, mxr, sum, ext_ptw) { /* No effPriv required since "all memory accesses are considered to be user-level accesses" */
                         TR_Address(spa, ext_ptw) => TR_Address(zero_extend(spa), ext_ptw),
                         TR_Failure(e, c, ext_ptw)   => TR_Failure(e, c, ext_ptw)
