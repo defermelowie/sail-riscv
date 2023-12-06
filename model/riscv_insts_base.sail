@@ -747,16 +747,14 @@ mapping clause encdec = ECALL()
   <-> 0b000000000000 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute ECALL() = {
-  let t : sync_exception =
-    struct { trap = match (cur_privilege, cur_virtualization) {
-                      (User, _)        => E_U_EnvCall(),
-                      (Supervisor, V0) => E_S_EnvCall(),
-                      (Supervisor, V1) => E_VS_EnvCall(),
-                      (Machine,_)      => E_M_EnvCall()
-                    },
-             excinfo = (None() : option(xlenbits)),
-             ext     = None() };
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC));
+ let e : ExceptionType = match (cur_privilege, cur_virtualization) {
+    (User, _)        => E_U_EnvCall(),
+    (Supervisor, V0) => E_S_EnvCall(),
+    (Supervisor, V1) => E_VS_EnvCall(),
+    (Machine,_)      => E_M_EnvCall()
+  };
+  let c : ExceptionContext = empty_exception_context();
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC));
   RETIRE_FAIL
 }
 

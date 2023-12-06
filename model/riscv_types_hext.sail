@@ -94,3 +94,16 @@ function virtMode_to_str (v) =
   }
 
 overload to_str = {virtMode_to_str}
+
+val virt_priv_to_str : (Privilege, Virtualization) -> string
+function virt_priv_to_str (priv, virt) =
+  match (priv, virt) {
+    (User, V1)       => "VU",
+    (User, V0)       => "U",
+    (Supervisor, V1) => "VS",
+    (Supervisor, V0) => "HS",
+    (Machine, V1)    => internal_error(__FILE__, __LINE__, "illegal privilege mode"),
+    (Machine, V0)    => "M",
+  }
+
+overload to_str = {virt_priv_to_str}

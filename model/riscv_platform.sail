@@ -501,24 +501,17 @@ function tick_platform() -> unit = {
 /* Platform-specific handling of instruction faults */
 
 function handle_illegal() -> unit = {
-  let info = if plat_mtval_has_illegal_inst_bits ()
-             then Some(instbits)
-             else None();
-  let t : sync_exception = struct { trap    = E_Illegal_Instr(),
-                                    excinfo = info,
-                                    ext     = None() };
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
+  let e = E_Illegal_Instr();
+  let c = instr_exception_context(instbits, plat_mtval_has_illegal_inst_bits());
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
 /* Platform-specific handling of virtual instruction traps */
+
 function handle_virtual_instr() -> unit = {
-  let info = if plat_mtval_has_illegal_inst_bits ()
-             then Some(instbits)
-             else None();
-  let t : sync_exception = struct { trap    = E_Virtual_Instr(),
-                                    excinfo = info,
-                                    ext     = None() };
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(t), PC))
+  let e = E_Virtual_Instr();
+  let c = instr_exception_context(instbits, plat_mtval_has_illegal_inst_bits());
+  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
 /* Platform-specific wait-for-interrupt */

@@ -68,10 +68,46 @@
 /*  SUCH DAMAGE.                                                                         */
 /*=======================================================================================*/
 
-/* model context for synchronous exceptions, parameterized for extensions */
+/* Model context for synchronous exceptions, parameterized for out-of-tree extensions */
 
-struct sync_exception = {
-  trap    : ExceptionType,
-  excinfo : option(xlenbits),
-  ext     : option(ext_exception)   /* for extensions */
+struct ExceptionContext = {
+  excinfo  : option(xlenbits),        /* Faulting address or instruction */
+  excinfo2 : option(xlenbits),        /* H-extension: faulting guest-physical address */
+  excinst  : option(xlenbits),        /* H-extension: transformed instruction or pseudoinstruction */
+  ext      : option(ext_exception)    /* For out-of-tree extensions */
 }
+
+/* Create contexts  for various exception classes */
+
+function empty_exception_context() -> ExceptionContext =
+  struct {
+    excinfo  = None(),
+    excinfo2 = None(),
+    excinst  = None(),
+    ext      = None(),
+  }
+
+function mem_exception_context(addr : xlenbits) -> ExceptionContext =
+  struct {
+    excinfo  = Some(addr),
+    excinfo2 = None(),
+    excinst  = None(),
+    ext      = None(),
+  }
+
+// TODO: Should pseudoinst be a parameter here?
+function vmem_exception_context(vaddr : xlenbits, gpaddr : option(xlenbits)) -> ExceptionContext =
+  struct {
+    excinfo  = Some(vaddr),
+    excinfo2 = gpaddr,
+    excinst  = None(),
+    ext      = None(),
+  }
+
+function instr_exception_context(inst : xlenbits, tval_has_ill_inst_bits : bool) -> ExceptionContext =
+  struct {
+    excinfo  = if tval_has_ill_inst_bits then Some(inst) else None(),
+    excinfo2 = None(),
+    excinst  = None(),
+    ext      = None(),
+  }

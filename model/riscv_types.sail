@@ -226,6 +226,22 @@ function interruptType_to_bits (i) =
     I_M_External => 0x0b
   }
 
+val interruptType_to_str : InterruptType -> string
+function interruptType_to_str (i) =
+  match (i) {
+    I_U_Software => "user-software-interrupt",
+    I_S_Software => "supervisor-software-interrupt",
+    I_M_Software => "machine-software-interrupt",
+    I_U_Timer    => "user-timer-interrupt",
+    I_S_Timer    => "supervisor-timer-interrupt",
+    I_M_Timer    => "machine-timer-interrupt",
+    I_U_External => "user-external-interrupt",
+    I_S_External => "supervisor-external-interrupt",
+    I_M_External => "machine-external-interrupt"
+  }
+
+overload to_str = {interruptType_to_str}
+
 /* architectural exception definitions */
 
 union ExceptionType = {
@@ -409,6 +425,33 @@ match(e) {
   E_SAMO_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
   _ => e /* Other exceptions are not access type specific */
 }
+
+/* Possible trap causes: either a synchronous exception or asynchronous interrupt */
+
+union TrapCause = {
+  I : InterruptType,
+  E : ExceptionType,
+}
+
+val trapCause_to_bits : TrapCause -> exc_code
+function trapCause_to_bits(t) = match t {
+  I(i) => interruptType_to_bits(i),
+  E(e) => exceptionType_to_bits(e),
+}
+
+val trapCause_is_interrupt : TrapCause -> bool
+function trapCause_is_interrupt(t) = match t {
+  I(_) => true,
+  _    => false,
+}
+
+val trapCause_to_str : TrapCause -> string
+function trapCause_to_str(t) = match t {
+  I(i) => interruptType_to_str(i),
+  E(e) => exceptionType_to_str(e),
+}
+
+overload to_str = {trapCause_to_str}
 
 /* trap modes */
 
