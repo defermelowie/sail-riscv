@@ -845,8 +845,6 @@ register stval    : xlenbits
  * S-mode address translation and protection (satp) layout.
  */
 
-register satp : xlenbits
-
 bitfield Satp64 : bits(64) = {
   Mode : 63 .. 60,
   Asid : 59 .. 44,

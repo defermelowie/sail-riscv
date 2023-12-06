@@ -164,11 +164,6 @@ function legalize_hedeleg(o: Medeleg, v: xlenbits) -> Medeleg = {
 /* **************************************************************** */
 /* Hypervisor Guest Address Translation and Protection              */
 
-register hgatp : xlenbits
-
-function get_hgatp() -> xlenbits =
-  hgatp
-
 bitfield Hgatp64 : bits(64) = {
   Mode : 63 .. 60,
   Vmid : 57 .. 44,

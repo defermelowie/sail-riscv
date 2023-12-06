@@ -151,7 +151,7 @@ function readCSR csr : csreg -> xlenbits = {
 
     /* hypervisor extendended supervisor mode */
     /* TODO: move h-ext CSR reads here in order to not use `ext*` types and hooks (see CODE_STYLE.md) */
-    (0x680, _) => get_hgatp(),
+    (0x680, _) => hgatp,
 
     /* supervisor mode */
     (0x100,  _) => if cur_virtualization == V1 then get_vsstatus() else lower_mstatus(mstatus).bits(),
@@ -247,7 +247,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
 
     /* hypervisor extendended supervisor mode */
     /* TODO: move h-ext CSR writes here in order to not use `ext*` types and hooks (see CODE_STYLE.md) */
-    (0x680, _) => { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(get_hgatp()) },
+    (0x680, _) => { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(hgatp) },
 
     /* supervisor mode */
     (0x100,  _) => match cur_virtualization {

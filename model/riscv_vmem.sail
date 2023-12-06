@@ -609,16 +609,49 @@ function satp_to_PT_base(sv_params : SV_Params, satp_val : xlenbits) -> bits(64)
   ppn_64b << PAGESIZE_BITS
 }
 
-// Compute address translation mode from SATP
+// ****************************************************************
+// Architectural HGATP CSR
+
+register hgatp : xlenbits
+
+// See riscv_sys_regs.sail for legalize_hgatp{32,64}().
+// WARNING: those functions legalize Mode but not ASID?
+// PUBLIC: invoked from writeCSR() to fixup WARL fields
+function legalize_hgatp(a : Architecture,
+                       o : xlenbits,        // previous value of hgatp
+                       v : xlenbits)        // proposed new value of hgatp
+                      -> xlenbits = {       // new legal value of hgatp
+  if sizeof(xlen) == 32 then {
+    // The slice and extend ops below are no-ops when xlen==32,
+    // but appease the type-checker when xlen==64 (when this code is not executed!)
+    let o32      : bits(32) = o[31 .. 0];
+    let v32      : bits(32) = v[31 .. 0];
+    let new_hgatp : bits(32) = legalize_hgatp32(a, o32, v32);
+    zero_extend(new_hgatp);
+  } else if sizeof(xlen) == 64 then {
+    // The extend and truncate ops below are no-ops when xlen==64,
+    // but appease the type-checker when xlen==32 (when this code is not executed!)
+    let o64      : bits(64) = zero_extend(o);
+    let v64      : bits(64) = zero_extend(v);
+    let new_hgatp : bits(64) = legalize_hgatp64(a, o64, v64);
+    truncate(new_hgatp, sizeof(xlen))
+  } else
+    internal_error(__FILE__, __LINE__, "Unsupported xlen" ^ string_of_int(sizeof(xlen)))
+}
+
+// ****************************************************************
+// Address translation mode
+
+// Compute address translation mode from SATP/HGATP
 // TODO: shouldn't we look at mstatus_UXL if priv is User?
 
 // PRIVATE
-function translationMode(priv : Privilege) -> SATPMode = {
+function translationMode(priv : Privilege) -> AddressTranslationMode = {
   if priv == Machine then
-    Sbare
+    Bare
   else if sizeof(xlen) == 32 then
     match satp[31] {
-      bitzero => Sbare,
+      bitzero => Bare,
       bitone  => Sv32
     }
   else if sizeof(xlen) == 64 then {
@@ -637,7 +670,7 @@ function translationMode(priv : Privilege) -> SATPMode = {
                     },
       Some(RV32) => match satp[31] {
                       // When xlen is 64, mstatus.SXL/UXL (for S, U privileges) can be RV32
-                      bitzero => Sbare,
+                      bitzero => Bare,
                       bitone  => Sv32
                     },
       _    => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
@@ -814,11 +847,11 @@ function translateAddr(vAddr   : xlenbits,
   // Effective privilege takes into account mstatus.PRV, mstatus.MPP
   // See riscv_sys_regs.sail for effectivePrivilege() and cur_privilege
   let effPriv   : Privilege = effectivePrivilege(ac, mstatus, cur_privilege);
-  let mode      : SATPMode = translationMode(effPriv);
+  let mode      : AddressTranslationMode = translationMode(effPriv);
   // PTW extensions (non-standard): initialize the PTW extension state
   let ext_ptw   : ext_ptw = init_ext_ptw;
   let (valid_va, sv_params) : (bool, SV_Params) = match mode {
-    Sbare => return TR_Address(vAddr, ext_ptw),
+    Bare  => return TR_Address(vAddr, ext_ptw),
     Sv32  => (true,                                 sv32_params),
     Sv39  => (is_valid_vAddr(sv39_params, vAddr_64b), sv39_params),
     Sv48  => (is_valid_vAddr(sv48_params, vAddr_64b), sv48_params),
