@@ -97,7 +97,7 @@ function clause ext_is_CSR_defined(0x243, _) = haveHExt() /* vstval */
 function clause ext_is_CSR_defined(0x244, _) = haveHExt() /* vsip */
 function clause ext_is_CSR_defined(0x280, _) = haveHExt() /* vsatp */
 
-/* H-ext CSR read handles */
+/* H-ext CSR read handles */// TODO: move to riscv_insts_zicsr.sail in order to not use ext* hooks
 function clause ext_read_CSR(0x34A) = Some(mtinst) /* mtinst */
 function clause ext_read_CSR(0x34B) = Some(mtval2) /* mtval2 */
 function clause ext_read_CSR(0x600) = Some(get_hstatus()) /* hstatus */

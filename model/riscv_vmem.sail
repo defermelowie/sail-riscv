@@ -88,7 +88,7 @@
 // ignore TLB functionality at first reading.
 
 // ****************************************************************
-// Parameters for VM modes sv32, sv39 and sv48
+// Parameters for VM modes Sv32, Sv39, Sv48, Sv57, Sv32x4, Sv39x4, Sv48x4 and Sv57x4
 
 // All VM modes use the same page size (4KB, with 12-bit index)
 
@@ -96,40 +96,70 @@ let PAGESIZE_BITS : nat = 12
 
 // PRIVATE
 struct SV_Params = {
-  // SATP CSR                            // Sv32  Sv39  Sv48
-  satp_asid_size_bits : { 9, 16},        //    9    16    16
-  satp_asid_lsb_index : {22, 44},        //   22    44    44
-  // SATP PPN
-  satp_ppn_size_bits  : {22, 44},        //   22    44    44
-  satp_ppn_lsb_index  : { 0},            //    0     0     0
+  // SATP/HGATP CSR                                         // Sv32  Sv39  Sv48  Sv57  Sv32x4  Sv39x4  Sv48x4  Sv57x4
+  xatp_id_size_bits : { 7, 9, 14, 16},                      //    9    16    16    16       7      14      14      14
+  xatp_id_lsb_index : {22, 44},                             //   22    44    44    44      22      44      44      44
+  // SATP/HGATP PPN
+  xatp_ppn_size_bits  : {22, 44},                           //   22    44    44    44      22      44      44      44
+  xatp_ppn_lsb_index  : { 0},                               //    0     0     0     0       0       0       0       0
 
   // VA
-  va_size_bits        : {32, 39, 48},    //   32    39    48
-  vpn_size_bits       : {10,  9},        //   10     9     9
+  va_size_bits        : {32, 34, 39, 41, 48, 50, 57, 59},   //   32    39    48    57      34      41      50      59
+  vpn_size_bits       : {10,  9},                           //   10     9     9     9      10       9       9       9
+  root_vpn_size_bits  : {9,  10, 11, 12},                   //   10     9     9     9      12      11      11      11
+  va_sign_extends     : bool,                               // true  true  true  true   false   false   false   false
 
   // PTE
-  levels              : { 2,  3,  4},    //    2     3     4
-  log_pte_size_bytes  : { 2,  3},        //    2     3     3
-  pte_msbs_lsb_index  : {32, 54},        //   32    54    54
-  pte_msbs_size_bits  : { 0, 10},        //    0    10    10
-  pte_PPNs_lsb_index  : {10},            //   10    10    10
-  pte_PPNs_size_bits  : {22, 44},        //   22    44    44
-  pte_PPN_j_size_bits : {10,  9}         //   10     9     9
+  levels              : { 2,  3,  4,  5},                   //    2     3     4     5       2       3       4       5
+  log_pte_size_bytes  : { 2,  3},                           //    2     3     3     3       2       3       3       3
+  pte_msbs_lsb_index  : {32, 54},                           //   32    54    54    54      32      54      54      54
+  pte_msbs_size_bits  : { 0, 10},                           //    0    10    10    10       0      10      10      10
+  pte_PPNs_lsb_index  : {10},                               //   10    10    10    10      10      10      10      10
+  pte_PPNs_size_bits  : {22, 44},                           //   22    44    44    44      22      44      44      44
+  pte_PPN_j_size_bits : {10,  9}                            //   10     9     9     9      10       9       9       9
 }
 
 // PRIVATE
 let sv32_params : SV_Params = struct {
        // SATP CSR
-       satp_asid_size_bits = 9,
-       satp_asid_lsb_index = 22,
+       xatp_id_size_bits   = 9,
+       xatp_id_lsb_index   = 22,
 
        // SATP PPN
-       satp_ppn_size_bits  = 22,
-       satp_ppn_lsb_index  = 0,
+       xatp_ppn_size_bits  = 22,
+       xatp_ppn_lsb_index  = 0,
 
        // VA
        va_size_bits        = 32,
        vpn_size_bits       = 10,
+       root_vpn_size_bits  = 10,
+       va_sign_extends     = true,
+
+       // PTE
+       levels              = 2,
+       log_pte_size_bytes  = 2,    // 4 Bytes
+       pte_msbs_lsb_index  = 32,
+       pte_msbs_size_bits  = 0,
+       pte_PPNs_lsb_index  = 10,
+       pte_PPNs_size_bits  = 22,
+       pte_PPN_j_size_bits = 10
+}
+
+// PRIVATE
+let sv32x4_params : SV_Params = struct {
+       // SATP CSR
+       xatp_id_size_bits   = 7,
+       xatp_id_lsb_index   = 22,
+
+       // SATP PPN
+       xatp_ppn_size_bits  = 22,
+       xatp_ppn_lsb_index  = 0,
+
+       // VA
+       va_size_bits        = 34,
+       vpn_size_bits       = 10,
+       root_vpn_size_bits  = 12,
+       va_sign_extends     = false,
 
        // PTE
        levels              = 2,
@@ -144,16 +174,44 @@ let sv32_params : SV_Params = struct {
 // PRIVATE
 let sv39_params : SV_Params = struct {
        // SATP CSR
-       satp_asid_size_bits = 16,
-       satp_asid_lsb_index = 44,
+       xatp_id_size_bits   = 14,
+       xatp_id_lsb_index   = 44,
 
        // SATP PPN
-       satp_ppn_size_bits  = 44,
-       satp_ppn_lsb_index  = 0,
+       xatp_ppn_size_bits  = 44,
+       xatp_ppn_lsb_index  = 0,
 
        // VA
        va_size_bits        = 39,
        vpn_size_bits       = 9,
+       root_vpn_size_bits  = 9,
+       va_sign_extends     = true,
+
+       // PTE
+       levels              = 3,
+       log_pte_size_bytes  = 3,    // 8 Bytes
+       pte_msbs_lsb_index  = 54,
+       pte_msbs_size_bits  = 10,
+       pte_PPNs_lsb_index  = 10,
+       pte_PPNs_size_bits  = 44,
+       pte_PPN_j_size_bits = 9
+}
+
+// PRIVATE
+let sv39x4_params : SV_Params = struct {
+       // SATP CSR
+       xatp_id_size_bits   = 16,
+       xatp_id_lsb_index   = 44,
+
+       // SATP PPN
+       xatp_ppn_size_bits  = 44,
+       xatp_ppn_lsb_index  = 0,
+
+       // VA
+       va_size_bits        = 41,
+       vpn_size_bits       = 9,
+       root_vpn_size_bits  = 11,
+       va_sign_extends     = false,
 
        // PTE
        levels              = 3,
@@ -168,16 +226,44 @@ let sv39_params : SV_Params = struct {
 // PRIVATE
 let sv48_params : SV_Params = struct {
        // SATP CSR
-       satp_asid_size_bits = 16,
-       satp_asid_lsb_index = 44,
+       xatp_id_size_bits   = 16,
+       xatp_id_lsb_index   = 44,
 
        // SATP PPN
-       satp_ppn_size_bits  = 44,
-       satp_ppn_lsb_index  = 0,
+       xatp_ppn_size_bits  = 44,
+       xatp_ppn_lsb_index  = 0,
 
        // VA
        va_size_bits        = 48,
        vpn_size_bits       = 9,
+       root_vpn_size_bits  = 9,
+       va_sign_extends     = true,
+
+       // PTE
+       levels              = 4,
+       log_pte_size_bytes  = 3,    // 8 Bytes
+       pte_msbs_lsb_index  = 54,
+       pte_msbs_size_bits  = 10,
+       pte_PPNs_lsb_index  = 10,
+       pte_PPNs_size_bits  = 44,
+       pte_PPN_j_size_bits = 9
+}
+
+// PRIVATE
+let sv48x4_params : SV_Params = struct {
+       // SATP CSR
+       xatp_id_size_bits   = 14,
+       xatp_id_lsb_index   = 44,
+
+       // SATP PPN
+       xatp_ppn_size_bits  = 44,
+       xatp_ppn_lsb_index  = 0,
+
+       // VA
+       va_size_bits        = 50,
+       vpn_size_bits       = 9,
+       root_vpn_size_bits  = 11,
+       va_sign_extends     = false,
 
        // PTE
        levels              = 4,
@@ -190,20 +276,22 @@ let sv48_params : SV_Params = struct {
 }
 
 // For future; not currently used
+// /*
 // PRIVATE
-/*
 let sv57_params : SV_Params = struct {
        // SATP CSR
-       satp_asid_size_bits = 16,
-       satp_asid_lsb_index = 44,
+       xatp_id_size_bits   = 16,
+       xatp_id_lsb_index   = 44,
 
        // SATP PPN
-       satp_ppn_size_bits  = 44,
-       satp_ppn_lsb_index  = 0,
+       xatp_ppn_size_bits  = 44,
+       xatp_ppn_lsb_index  = 0,
 
        // VA
        va_size_bits        = 57,
        vpn_size_bits       = 9,
+       root_vpn_size_bits  = 9,
+       va_sign_extends     = true,
 
        // PTE
        levels              = 5,
@@ -214,7 +302,33 @@ let sv57_params : SV_Params = struct {
        pte_PPNs_size_bits  = 44,
        pte_PPN_j_size_bits = 9
 }
-*/
+
+// PRIVATE
+let sv57x4_params : SV_Params = struct {
+       // SATP CSR
+       xatp_id_size_bits   = 14,
+       xatp_id_lsb_index   = 44,
+
+       // SATP PPN
+       xatp_ppn_size_bits  = 44,
+       xatp_ppn_lsb_index  = 0,
+
+       // VA
+       va_size_bits        = 59,
+       vpn_size_bits       = 9,
+       root_vpn_size_bits  = 11,
+       va_sign_extends     = false,
+
+       // PTE
+       levels              = 5,
+       log_pte_size_bytes  = 3,    // 8 Bytes
+       pte_msbs_lsb_index  = 54,
+       pte_msbs_size_bits  = 10,
+       pte_PPNs_lsb_index  = 10,
+       pte_PPNs_size_bits  = 44,
+       pte_PPN_j_size_bits = 9
+}
+// */
 
 // PRIVATE
 val      undefined_SV_Params : unit -> SV_Params
@@ -236,7 +350,9 @@ function vpn_j_of_va(sv_params : SV_Params,
                      va        : bits(64),
                      level     : nat)       -> bits(64) = {
     let lsb  : nat       = PAGESIZE_BITS + level * sv_params.vpn_size_bits;
-    let mask : bits(64) = (zero_extend(0b1) << sv_params.vpn_size_bits) - 1;
+    let mask : bits(64) = if (level == sv_params.levels - 1)
+                          then (zero_extend(0b1) << sv_params.root_vpn_size_bits) - 1
+                          else (zero_extend(0b1) << sv_params.vpn_size_bits) - 1;
     ((va >> lsb) & mask)
 }
 
@@ -247,15 +363,17 @@ function offset_of_va(va : bits(64)) -> bits(64) = {
 }
 
 // Valid xlen-wide values containing virtual addrs must have upper
-// bits equal to the MSB of the virtual address.
+// bits equal to the MSB of the virtual address for S- and VS-stage
+// address translation. G-stage address translation schemes require
+// the upper bits to be zero.
 // Virtual address widths depend on the virtual memory mode.
 // PRIVATE
-function is_valid_vAddr(struct { va_size_bits, _ } : SV_Params,
+function is_valid_vAddr(struct { va_size_bits, va_sign_extends, _ } : SV_Params,
                         vAddr                      : bits(64))  -> bool = {
   let index      = va_size_bits - 1;
   let upper_bits = vAddr[63 .. va_size_bits];
   let va_msb     = vAddr[index];
-  if va_msb == bitzero then
+  if (va_msb == bitzero | not(va_sign_extends)) then
     upper_bits == zeros()
   else
     upper_bits == ones()
@@ -268,6 +386,9 @@ function is_valid_vAddr(struct { va_size_bits, _ } : SV_Params,
 // Sv32      -       31..10    9..8    7..0
 // Sv39    63..54    53..10    9..8    7..0
 // Sv48    63..54    53..10    9..8    7..0
+// Sv32x4    -       31..10    9..8    7..0
+// Sv39x4  63..54    53..10    9..8    7..0
+// Sv48x4  63..54    53..10    9..8    7..0
 
 // MSBs of PTE are reserved for RV64 extensions.
 // There are no available bits on RV32, so these bits will be zeros on RV32.
@@ -398,6 +519,7 @@ union PTW_Error = {
   PTW_No_Permission : unit,
   PTW_Misaligned    : unit,          // misaligned superpage
   PTW_PTE_Update    : unit,          // PTE update needed but not enabled
+  PTW_Implicit      : ExceptionType, // error during implicit access during VS-stage translation
   PTW_Ext_Error     : ext_ptw_error  // parameterized for errors from extensions
 }
 
@@ -410,6 +532,7 @@ function ptw_error_to_str(e : PTW_Error) -> string = {
     PTW_No_Permission()  => "no-permission",
     PTW_Misaligned()     => "misaligned-superpage",
     PTW_PTE_Update()     => "pte-update-needed",
+    PTW_Implicit(_)      => "implicit-access-error",
     PTW_Ext_Error(e)     => "extension-error"
   }
 }
@@ -431,6 +554,7 @@ function translationException(a : AccessType(ext_access_type),
                              -> ExceptionType = {
   match (a, f) {
     (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
+    (_, PTW_Implicit(e))         => exceptionType_update_AccessType(e, a),
     (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
     (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
     (Read(_), PTW_Access())      => E_Load_Access_Fault(),
@@ -594,8 +718,8 @@ function legalize_satp(a : Architecture,
 function satp_to_asid(sv_params : SV_Params, satp_val : xlenbits) -> bits(16) = {
   // This extend op is a no-op when xlen==64, extends when xlen==32
   let satp_64b : bits(64) = zero_extend (satp_val);
-  let mask_64b : bits(64) = (zero_extend(0b1) << sv_params.satp_asid_size_bits) - zero_extend(0b1);
-  let asid_64b : bits(64) = (satp_64b >>  sv_params.satp_asid_lsb_index) & mask_64b;
+  let mask_64b : bits(64) = (zero_extend(0b1) << sv_params.xatp_id_size_bits) - zero_extend(0b1);
+  let asid_64b : bits(64) = (satp_64b >>  sv_params.xatp_id_lsb_index) & mask_64b;
   asid_64b[15 .. 0]
 }
 
@@ -604,8 +728,8 @@ function satp_to_asid(sv_params : SV_Params, satp_val : xlenbits) -> bits(16) = 
 function satp_to_PT_base(sv_params : SV_Params, satp_val : xlenbits) -> bits(64) = {
   // This extend op is a no-op when xlen==64, extends when xlen==32
   let satp_64b : bits(64) = zero_extend (satp_val);
-  let mask_64b : bits(64) = (zero_extend(0b1) << sv_params.satp_ppn_size_bits) - zero_extend(0b1);
-  let ppn_64b  : bits(64) = (satp_64b >>  sv_params.satp_ppn_lsb_index) & mask_64b;
+  let mask_64b : bits(64) = (zero_extend(0b1) << sv_params.xatp_ppn_size_bits) - zero_extend(0b1);
+  let ppn_64b  : bits(64) = (satp_64b >>  sv_params.xatp_ppn_lsb_index) & mask_64b;
   ppn_64b << PAGESIZE_BITS
 }
 
@@ -614,8 +738,8 @@ function satp_to_PT_base(sv_params : SV_Params, satp_val : xlenbits) -> bits(64)
 
 register hgatp : xlenbits
 
-// See riscv_sys_regs.sail for legalize_hgatp{32,64}().
-// WARNING: those functions legalize Mode but not ASID?
+// See riscv_hext_regs.sail for legalize_hgatp{32,64}().
+// WARNING: those functions legalize Mode but not VMID?
 // PUBLIC: invoked from writeCSR() to fixup WARL fields
 function legalize_hgatp(a : Architecture,
                        o : xlenbits,        // previous value of hgatp
@@ -639,6 +763,18 @@ function legalize_hgatp(a : Architecture,
     internal_error(__FILE__, __LINE__, "Unsupported xlen" ^ string_of_int(sizeof(xlen)))
 }
 
+// ----------------
+// Fields of HGATP
+
+// VMID is 7b in Sv32x4, 14b in Sv39x4/Sv48x4/Sv57x4: we use 14b for both
+// PRIVATE
+function hgatp_to_vmid(sv_params : SV_Params, hgatp_val : xlenbits) -> bits(14) = {
+  // This extend op is a no-op when xlen==64, extends when xlen==32
+  let vmatp_64b : bits(64) = zero_extend (hgatp_val);
+  let mask_64b  : bits(64) = (zero_extend(0b1) << sv_params.xatp_id_size_bits) - zero_extend(0b1);
+  let asid_64b  : bits(64) = (vmatp_64b >>  sv_params.xatp_id_lsb_index) & mask_64b;
+  vmatp_64b[13 .. 0]
+}
 // ****************************************************************
 // Address translation mode
 
