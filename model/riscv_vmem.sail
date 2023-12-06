@@ -782,38 +782,43 @@ function hgatp_to_vmid(sv_params : SV_Params, hgatp_val : xlenbits) -> bits(14) 
 // TODO: shouldn't we look at mstatus_UXL if priv is User?
 
 // PRIVATE
-function translationMode(priv : Privilege) -> AddressTranslationMode = {
-  if priv == Machine then
-    Bare
-  else if sizeof(xlen) == 32 then
-    match satp[31] {
-      bitzero => Bare,
-      bitone  => Sv32
+function translationMode(priv : Privilege, stage : AddressTranslationStage) -> AddressTranslationMode = {
+  let mode : option(AddressTranslationMode) = match priv {
+    Machine => Some(Bare),
+    _       => {
+      if sizeof(xlen) == 32 then
+        match stage {
+          S  => satp64Mode_of_bits(RV32, zero_extend(Mk_Satp32(satp).Mode())),
+          VS => satp64Mode_of_bits(RV32, zero_extend(Mk_Satp32(vsatp).Mode())),
+          G  => hgatp64Mode_of_bits(RV32, zero_extend(Mk_Hgatp32(hgatp).Mode())),
+        }
+      else if sizeof(xlen) == 64 then
+        // When xlen is 64, mstatus.SXL (S/HS-mode) or hstatus.VSXL (VS-mode) can be RV32
+        match stage {
+          S  => match architecture(get_mstatus_SXL(mstatus)) {
+                  Some(RV32) => satp64Mode_of_bits(RV32, zero_extend(Mk_Satp32(satp[31 .. 0]).Mode())),
+                  Some(RV64) => satp64Mode_of_bits(RV64, Mk_Satp64(satp).Mode()),
+                  _          => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
+          },
+          VS => match architecture(get_hstatus_VSXL(hstatus)) {
+                  Some(RV32) => satp64Mode_of_bits(RV32, zero_extend(Mk_Satp32(vsatp[31 .. 0]).Mode())),
+                  Some(RV64) => satp64Mode_of_bits(RV64, Mk_Satp64(vsatp).Mode()),
+                  _          => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
+          },
+          G  => match architecture(get_mstatus_SXL(mstatus)) {
+                  Some(RV32) => hgatp64Mode_of_bits(RV32, zero_extend(Mk_Hgatp32(hgatp[31 .. 0]).Mode())),
+                  Some(RV64) => hgatp64Mode_of_bits(RV64, Mk_Hgatp64(hgatp).Mode()),
+                  _          => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
+          },
+        }
+      else
+        internal_error(__FILE__, __LINE__, "unsupported xlen")
     }
-  else if sizeof(xlen) == 64 then {
-    // This extend op is a no-op when xlen==64,
-    // but appeases the type-checker when xlen==32 (when this code is not executed!)
-    let satp_64b : bits(64) = zero_extend(satp);
-    // Translation mode is based on mstatus.SXL, which could be RV32 when xlen==64
-    let arch = architecture(get_mstatus_SXL(mstatus));
-    match arch {
-      Some(RV64) => { let mbits : bits(4) = satp[63 .. 60];
-                      match satp64Mode_of_bits(RV64, mbits) {    // see riscv_types.sail
-                        Some(m) => m,
-                        None()  => internal_error(__FILE__, __LINE__,
-                                                  "invalid RV64 translation mode in satp")
-                      }
-                    },
-      Some(RV32) => match satp[31] {
-                      // When xlen is 64, mstatus.SXL/UXL (for S, U privileges) can be RV32
-                      bitzero => Bare,
-                      bitone  => Sv32
-                    },
-      _    => internal_error(__FILE__, __LINE__, "unsupported address translation arch")
-    }
+  } in
+  match mode {
+      Some(m) => m,
+      None()  => internal_error(__FILE__, __LINE__, "invalid translation mode in xatp")
   }
-  else
-    internal_error(__FILE__, __LINE__, "unsupported xlen")
 }
 
 // ****************************************************************
@@ -982,8 +987,10 @@ function translateAddr(vAddr   : xlenbits,
   let vAddr_64b : bits(64) = zero_extend(vAddr);
   // Effective privilege takes into account mstatus.PRV, mstatus.MPP
   // See riscv_sys_regs.sail for effectivePrivilege() and cur_privilege
-  let effPriv   : Privilege = effectivePrivilege(ac, mstatus, cur_privilege);
-  let mode      : AddressTranslationMode = translationMode(effPriv);
+  let effPriv   : Privilege      = effectivePrivilege(ac, mstatus, cur_privilege);
+  let effVirt   : Virtualization = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
+  let stage = if effVirt == V0 then S else VS;
+  let mode      : AddressTranslationMode = translationMode(effPriv, stage);
   // PTW extensions (non-standard): initialize the PTW extension state
   let ext_ptw   : ext_ptw = init_ext_ptw;
   let (valid_va, sv_params) : (bool, SV_Params) = match mode {

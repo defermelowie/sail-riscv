@@ -489,13 +489,21 @@ function extStatus_of_bits(e) =
     0b11 => Dirty
   }
 
-/* address translation modes */
+/* address translation stages & modes */
+
+/*
+ * We model 3 stages:
+ *   - S:  va --> pa  (V=0)
+ *   - VS: va --> gpa (V=1)
+ *   - G:  gpa -> spa (V=1)
+ */
+enum AddressTranslationStage = {S, VS, G}
+
 enum AddressTranslationMode = {Bare, Sv32, Sv39, Sv48, Sv57, Sv32x4, Sv39x4, Sv48x4, Sv57x4}
 
-type satp_mode = bits(4)
-type hgatp_mode = bits(4)
+type atp64_mode = bits(4)
 
-function satp64Mode_of_bits(a : Architecture, m : satp_mode) -> option(AddressTranslationMode) =
+function satp64Mode_of_bits(a : Architecture, m : atp64_mode) -> option(AddressTranslationMode) =
   match (a, m) {
     (_,    0x0) => Some(Bare),
     (RV32, 0x1) => Some(Sv32),
@@ -505,7 +513,7 @@ function satp64Mode_of_bits(a : Architecture, m : satp_mode) -> option(AddressTr
     (_, _)      => None()
   }
 
-function hgatpMode_of_bits(a : Architecture, m : hgatp_mode) -> option(AddressTranslationMode) =
+function hgatp64Mode_of_bits(a : Architecture, m : atp64_mode) -> option(AddressTranslationMode) =
   match (a, m) {
     (_,    0x0) => Some(Bare),
     (RV32, 0x1) => Some(Sv32x4),
