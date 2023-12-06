@@ -499,6 +499,14 @@ function extStatus_of_bits(e) =
  */
 enum AddressTranslationStage = {S, VS, G}
 
+function AddressTranslationStage_to_str(s : AddressTranslationStage) -> string =
+  match s {
+    S  => "S",
+    VS => "VS",
+    G  => "G"
+  }
+overload to_str = {AddressTranslationStage_to_str}
+
 enum AddressTranslationMode = {Bare, Sv32, Sv39, Sv48, Sv57, Sv32x4, Sv39x4, Sv48x4, Sv57x4}
 
 type atp64_mode = bits(4)

@@ -120,11 +120,12 @@ function flush_TLB_Entry(e    : TLB_Entry,
 }
 
 // PUBLIC: invoked in translate() [riscv_vmem.sail]
-function lookup_TLB (asid : bits(16), vaddr : bits(64)) -> option((nat, TLB_Entry)) =
-  match tlb {
-    None()  => None(),
-    Some(e) => if match_TLB_Entry(e, asid, vaddr) then Some((0, e)) else None()
-  }
+function lookup_TLB (asid : bits(16), stage : AddressTranslationStage, vaddr : bits(64)) -> option((nat, TLB_Entry)) =
+  None() // Fixme: Return TLB match  based on stage (one TLB per stage)
+  // match tlb {
+  //   None()  => None(),
+  //   Some(e) => if match_TLB_Entry(e, asid, vaddr) then Some((0, e)) else None()
+  // }
 
 // PRIVATE
 function add_to_TLB(asid          : bits(16),
