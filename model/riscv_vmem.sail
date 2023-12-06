@@ -506,182 +506,6 @@ function update_PTE_Bits(sv_params : SV_Params,
 }
 
 // ****************************************************************
-// Results of Page Table Walk (PTW)
-
-// 'ext_ptw' supports (non-standard) extensions to the default addr-translation and PTW.
-
-// Failure modes for address-translation/page-table-walks
-// PRIVATE
-union PTW_Error = {
-  PTW_Invalid_Addr  : unit,          // invalid source address
-  PTW_Access        : unit,          // physical memory access error for a PTE
-  PTW_Invalid_PTE   : unit,
-  PTW_No_Permission : unit,
-  PTW_Misaligned    : unit,          // misaligned superpage
-  PTW_PTE_Update    : unit,          // PTE update needed but not enabled
-  PTW_Implicit      : ExceptionType, // error during implicit access during VS-stage translation
-  PTW_Ext_Error     : ext_ptw_error  // parameterized for errors from extensions
-}
-
-// PRIVATE: only 'to_str' overload is public
-function ptw_error_to_str(e : PTW_Error) -> string = {
-  match e {
-    PTW_Invalid_Addr()   => "invalid-source-addr",
-    PTW_Access()         => "mem-access-error",
-    PTW_Invalid_PTE()    => "invalid-pte",
-    PTW_No_Permission()  => "no-permission",
-    PTW_Misaligned()     => "misaligned-superpage",
-    PTW_PTE_Update()     => "pte-update-needed",
-    PTW_Implicit(_)      => "implicit-access-error",
-    PTW_Ext_Error(e)     => "extension-error"
-  }
-}
-
-// PUBLIC
-overload to_str = {ptw_error_to_str}
-
-// hook for (non-standard) extensions to customize errors reported by page-table
-// walks during address translation; it typically works in conjunction
-// with any customization to check_PTE_permission().
-
-// PRIVATE
-function ext_get_ptw_error(eptwf : ext_ptw_fail) -> PTW_Error =
-  PTW_No_Permission()
-
-// Convert translation/PTW failures into architectural exceptions
-function translationException(a : AccessType(ext_access_type),
-                              f : PTW_Error)
-                             -> ExceptionType = {
-  match (a, f) {
-    (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
-    (_, PTW_Implicit(e))         => exceptionType_update_AccessType(e, a),
-    (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
-    (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
-    (Read(_), PTW_Access())      => E_Load_Access_Fault(),
-    (Read(_), _)                 => E_Load_Page_Fault(),
-    (Write(_), PTW_Access())     => E_SAMO_Access_Fault(),
-    (Write(_), _)                => E_SAMO_Page_Fault(),
-    (Execute(), PTW_Access())    => E_Fetch_Access_Fault(),
-    (Execute(), _)               => E_Fetch_Page_Fault()
-  }
-}
-
-// PRIVATE
-union PTW_Result = {
-  PTW_Success: (bits(64), bits(64), bits(64), nat, bool, ext_ptw),
-  PTW_Failure: (PTW_Error, ext_ptw)
-}
-
-// ****************************************************************
-// Page Table Walk (PTW)
-
-// Note: 'pt_walk()' is recursive => cannot merge 'val' and 'function' decls
-
-// PRIVATE
-val pt_walk : (SV_Params,
-               AddressTranslationStage,
-               bits(64),                     // virtual addr
-               AccessType(ext_access_type),  // Read/Write/ReadWWrite/Execute
-               Privilege,                    // User/Supervisor/Machine
-               bool,                         // mstatus.MXR
-               bool,                         // do_sum
-               bits(64),                     // PT base addr
-               nat,                          // tree level for this recursive call
-               bool,                         // global translation,
-               ext_ptw)                      // ext_ptw
-              -> PTW_Result
-
-function pt_walk(sv_params,
-                 stage,
-                 va,
-                 ac,
-                 priv,
-                 mxr,
-                 do_sum,
-                 pt_base,
-                 level,
-                 global,
-                 ext_ptw) = {
-  let vpn_j      = vpn_j_of_va(sv_params, va, level);
-  let pte_offset = vpn_j << sv_params.log_pte_size_bytes;
-  let pte_addr   = pt_base + pte_offset;
-  let pte_phys_addr : xlenbits = pte_addr[(sizeof(xlen) - 1) .. 0];
-
-  // Read this-level PTE from mem
-  let mem_result = mem_read_priv(Read(Data),              // AccessType
-                                 Supervisor,              // Privilege
-                                 pte_phys_addr,
-                                 8,                       // atom (8)
-                                 false,                   // aq
-                                 false,                   // rl
-                                 false);                  // res
-
-  match mem_result {
-    MemException(_) => PTW_Failure(PTW_Access(), ext_ptw),
-    MemValue(pte)   => {
-      let ppns : bits(64) = PPNs_of_PTE(sv_params, pte);
-      let ext_pte         = msbs_of_PTE(sv_params, pte);
-      let global'         = global | (G_of_PTE(pte) == bitone);
-      if pte_is_invalid(pte) then
-        PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
-      else {
-        // Non-Leaf PTE
-        if pte_is_ptr(pte) then {
-          if level > 0 then {
-            // follow the pointer to walk next level
-            let pt_base' : bits(64) = shiftl(ppns, PAGESIZE_BITS);
-            let level'        = level - 1;
-            pt_walk(sv_params, stage, va, ac, priv, mxr, do_sum,
-                    pt_base', level', global', ext_ptw)
-          }
-          else
-            // level 0 PTE, but contains a pointer instead of a leaf
-            PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
-        }
-        // Leaf PTE
-        else {
-          let pte_check = check_PTE_permission(ac, priv, mxr, do_sum,
-                                               U_of_PTE(pte),
-                                               X_of_PTE(pte),
-                                               W_of_PTE(pte),
-                                               R_of_PTE(pte),
-                                               ext_pte,
-                                               ext_ptw);
-          match pte_check {
-            PTE_Check_Failure(ext_ptw, ext_ptw_fail) =>
-              PTW_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw),
-            PTE_Check_Success(ext_ptw) =>
-              if level > 0 then {
-                // Superpage; construct mask for lower-level PPNs from the PTE
-                mask_PPN_j : bits(64) = (zero_extend(0b1) << sv_params.pte_PPN_j_size_bits)
-                                        - zero_extend(0b1);
-                mask       : bits(64) = zero_extend(0b0);
-                foreach (j from 0 to (level - 1))
-                  mask = ((mask << sv_params.pte_PPN_j_size_bits) | mask_PPN_j);
-                // Lower-level PPNs must be zero (for aligned superpage)
-                if not((ppns & mask) == zero_extend(0b0)) then
-                  // misaligned superpage mapping
-                  PTW_Failure(PTW_Misaligned(), ext_ptw)
-                else {
-                  // Compose final PA in superpage:
-                  // Superpage PPN + lower VPNs + PAGESIZE_BITS page-offset
-                  let ppn = ppns | (vpns_of_va (sv_params, va) & mask);
-                  let pa  = ((ppn << PAGESIZE_BITS) | offset_of_va(va));
-                  PTW_Success(pa, pte, pte_addr, level, global', ext_ptw)
-                }
-              }
-              else {
-                let pa = ((ppns << PAGESIZE_BITS) | offset_of_va (va));
-                PTW_Success(pa, pte, pte_addr, level, global', ext_ptw)
-              }
-          }
-        }
-      }
-    }
-  }
-}
-
-// ****************************************************************
 // Architectural SATP CSR
 
 // PUBLIC: see also riscv_insts_zicsr.sail and other CSR-related files
@@ -834,8 +658,76 @@ function translationMode(priv : Privilege, stage : AddressTranslationStage) -> A
   }
 }
 
+
 // ****************************************************************
-// VA to PA translation
+// Results of Page Table Walk (PTW)
+
+// 'ext_ptw' supports (non-standard) extensions to the default addr-translation and PTW.
+
+// Failure modes for address-translation/page-table-walks
+// PRIVATE
+union PTW_Error = {
+  PTW_Invalid_Addr  : unit,          // invalid source address
+  PTW_Access        : unit,          // physical memory access error for a PTE
+  PTW_Invalid_PTE   : unit,
+  PTW_No_Permission : unit,
+  PTW_Misaligned    : unit,          // misaligned superpage
+  PTW_PTE_Update    : unit,          // PTE update needed but not enabled
+  PTW_Implicit      : ExceptionType, // error during implicit access during VS-stage translation
+  PTW_Ext_Error     : ext_ptw_error  // parameterized for errors from extensions
+}
+
+// PRIVATE: only 'to_str' overload is public
+function ptw_error_to_str(e : PTW_Error) -> string = {
+  match e {
+    PTW_Invalid_Addr()   => "invalid-source-addr",
+    PTW_Access()         => "mem-access-error",
+    PTW_Invalid_PTE()    => "invalid-pte",
+    PTW_No_Permission()  => "no-permission",
+    PTW_Misaligned()     => "misaligned-superpage",
+    PTW_PTE_Update()     => "pte-update-needed",
+    PTW_Implicit(_)      => "implicit-access-error",
+    PTW_Ext_Error(e)     => "extension-error"
+  }
+}
+
+// PUBLIC
+overload to_str = {ptw_error_to_str}
+
+// hook for (non-standard) extensions to customize errors reported by page-table
+// walks during address translation; it typically works in conjunction
+// with any customization to check_PTE_permission().
+
+// PRIVATE
+function ext_get_ptw_error(eptwf : ext_ptw_fail) -> PTW_Error =
+  PTW_No_Permission()
+
+// Convert translation/PTW failures into architectural exceptions
+function translationException(a : AccessType(ext_access_type),
+                              f : PTW_Error)
+                             -> ExceptionType = {
+  match (a, f) {
+    (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
+    (_, PTW_Implicit(e))         => exceptionType_update_AccessType(e, a),
+    (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
+    (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
+    (Read(_), PTW_Access())      => E_Load_Access_Fault(),
+    (Read(_), _)                 => E_Load_Page_Fault(),
+    (Write(_), PTW_Access())     => E_SAMO_Access_Fault(),
+    (Write(_), _)                => E_SAMO_Page_Fault(),
+    (Execute(), PTW_Access())    => E_Fetch_Access_Fault(),
+    (Execute(), _)               => E_Fetch_Page_Fault()
+  }
+}
+
+// PRIVATE
+union PTW_Result = {
+  PTW_Success: (bits(64), bits(64), bits(64), nat, bool, ext_ptw),
+  PTW_Failure: (PTW_Error, ext_ptw)
+}
+
+// ****************************************************************
+// Translate VA -> GPA or GPA -> SPA
 
 // Result of address translation
 
@@ -844,6 +736,137 @@ union TR_Result('paddr : Type, 'failure : Type) = {
   TR_Address : ('paddr, ext_ptw),
   TR_Failure : ('failure, ext_ptw)
 }
+
+// Note: translate is used for translation of implicit accesses during page walk
+//       => 'val' declaration should occur before 'function' definition of pt_walk,
+//          the 'function' definition of translate is further down in this file
+
+// PRIVATE
+val translate : (SV_Params,
+                AddressTranslationStage,
+                bits(16),                     // asid/vmid
+                bits(64),                     // page table base
+                bits(64),                     // virtual addr
+                AccessType(ext_access_type),  // Read/Write/ReadWrite/Execute
+                Privilege,                    // User/Supervisor/Machine
+                bool,                         // sstatus.MXR/vsstatus.MXR
+                bool,                         // sstatus.SUM/vsstatus.SUM
+                nat,                          // level
+                ext_ptw)                      // ext_ptw
+                -> TR_Result(bits(64), PTW_Error)
+
+
+// ****************************************************************
+// Page Table Walk (PTW)
+
+// Note: 'pt_walk()' is recursive => cannot merge 'val' and 'function' decls
+
+// PRIVATE
+val pt_walk : (SV_Params,
+               AddressTranslationStage,
+               bits(64),                     // virtual addr
+               AccessType(ext_access_type),  // Read/Write/ReadWWrite/Execute
+               Privilege,                    // User/Supervisor/Machine
+               bool,                         // mstatus.MXR
+               bool,                         // do_sum
+               bits(64),                     // PT base addr
+               nat,                          // tree level for this recursive call
+               bool,                         // global translation,
+               ext_ptw)                      // ext_ptw
+              -> PTW_Result
+
+function pt_walk(sv_params,
+                 stage,
+                 va,
+                 ac,
+                 priv,
+                 mxr,
+                 do_sum,
+                 pt_base,
+                 level,
+                 global,
+                 ext_ptw) = {
+  let vpn_j      = vpn_j_of_va(sv_params, va, level);
+  let pte_offset = vpn_j << sv_params.log_pte_size_bytes;
+  let pte_addr   = pt_base + pte_offset;
+  let pte_phys_addr : xlenbits = pte_addr[(sizeof(xlen) - 1) .. 0];
+
+  // Read this-level PTE from mem
+  let mem_result = mem_read_priv(Read(Data),              // AccessType
+                                 Supervisor,              // Privilege
+                                 pte_phys_addr,
+                                 8,                       // atom (8)
+                                 false,                   // aq
+                                 false,                   // rl
+                                 false);                  // res
+
+  match mem_result {
+    MemException(_) => PTW_Failure(PTW_Access(), ext_ptw),
+    MemValue(pte)   => {
+      let ppns : bits(64) = PPNs_of_PTE(sv_params, pte);
+      let ext_pte         = msbs_of_PTE(sv_params, pte);
+      let global'         = global | (G_of_PTE(pte) == bitone);
+      if pte_is_invalid(pte) then
+        PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
+      else {
+        // Non-Leaf PTE
+        if pte_is_ptr(pte) then {
+          if level > 0 then {
+            // follow the pointer to walk next level
+            let pt_base' : bits(64) = shiftl(ppns, PAGESIZE_BITS);
+            let level'        = level - 1;
+            pt_walk(sv_params, stage, va, ac, priv, mxr, do_sum,
+                    pt_base', level', global', ext_ptw)
+          }
+          else
+            // level 0 PTE, but contains a pointer instead of a leaf
+            PTW_Failure(PTW_Invalid_PTE(), ext_ptw)
+        }
+        // Leaf PTE
+        else {
+          let pte_check = check_PTE_permission(ac, priv, mxr, do_sum,
+                                               U_of_PTE(pte),
+                                               X_of_PTE(pte),
+                                               W_of_PTE(pte),
+                                               R_of_PTE(pte),
+                                               ext_pte,
+                                               ext_ptw);
+          match pte_check {
+            PTE_Check_Failure(ext_ptw, ext_ptw_fail) =>
+              PTW_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw),
+            PTE_Check_Success(ext_ptw) =>
+              if level > 0 then {
+                // Superpage; construct mask for lower-level PPNs from the PTE
+                mask_PPN_j : bits(64) = (zero_extend(0b1) << sv_params.pte_PPN_j_size_bits)
+                                        - zero_extend(0b1);
+                mask       : bits(64) = zero_extend(0b0);
+                foreach (j from 0 to (level - 1))
+                  mask = ((mask << sv_params.pte_PPN_j_size_bits) | mask_PPN_j);
+                // Lower-level PPNs must be zero (for aligned superpage)
+                if not((ppns & mask) == zero_extend(0b0)) then
+                  // misaligned superpage mapping
+                  PTW_Failure(PTW_Misaligned(), ext_ptw)
+                else {
+                  // Compose final PA in superpage:
+                  // Superpage PPN + lower VPNs + PAGESIZE_BITS page-offset
+                  let ppn = ppns | (vpns_of_va (sv_params, va) & mask);
+                  let pa  = ((ppn << PAGESIZE_BITS) | offset_of_va(va));
+                  PTW_Success(pa, pte, pte_addr, level, global', ext_ptw)
+                }
+              }
+              else {
+                let pa = ((ppns << PAGESIZE_BITS) | offset_of_va (va));
+                PTW_Success(pa, pte, pte_addr, level, global', ext_ptw)
+              }
+          }
+        }
+      }
+    }
+  }
+}
+
+// ****************************************************************
+// VA to PA translation
 
 // This function can be ignored on first reading since TLBs are not
 // part of RISC-V architecture spec (see TLB_NOTE above).
@@ -967,18 +990,18 @@ function translate_TLB_miss(sv_params : SV_Params,
 }
 
 // PRIVATE
-function translate(sv_params : SV_Params,
-                   stage     : AddressTranslationStage,
-                   xxid      : bits(16),
-                   ptb        : bits(64),
-                   vAddr_arg : bits(64),
-                   ac         : AccessType(ext_access_type),
-                   priv      : Privilege,
-                   mxr        : bool,
-                   do_sum    : bool,
-                   level     : nat,
-                   ext_ptw   : ext_ptw)
-                  -> TR_Result(bits(64), PTW_Error) = {
+function translate(sv_params, // SV_Params
+                   stage,     // AddressTranslationStage
+                   xxid,      // bits(16)
+                   ptb,       // bits(64)
+                   vAddr_arg, // bits(64)
+                   ac,        // AccessType(ext_access_type)
+                   priv,      // Privilege
+                   mxr,       // bool
+                   do_sum,    // bool
+                   level,     // nat
+                   ext_ptw    // ext_ptw
+                  ) = {       // -> TR_Result(bits(64), PTW_Error)
   let one_64b  : bits(64) = zero_extend(0b1);
   let va_mask = (one_64b << sv_params.va_size_bits) - 1;
   let vAddr   = (vAddr_arg & va_mask);
@@ -1025,6 +1048,7 @@ function translateAddr(vAddr   : xlenbits,
   if not(valid_va) then
     TR_Failure(translationException(ac, PTW_Invalid_Addr()), ext_ptw)
   else {
+    // FIXME: get correct params based on Stage (S/VS)
     let mxr    : bool     = mstatus.MXR() == 0b1;
     let do_sum : bool     = mstatus.SUM() == 0b1;
     let asid   : bits(16) = satp_to_asid(sv_params, satp);
