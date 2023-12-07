@@ -127,6 +127,7 @@ static struct option options[] = {
     {"disable-fdext",               no_argument,       0, 'F'                     },
     {"disable-hext",                no_argument,       0, 'H'                     },
     {"mtval-has-illegal-inst-bits", no_argument,       0, 'i'                     },
+    {"xtinst-has-transformed-inst", no_argument,       0, 'f'                     },
     {"device-tree-blob",            required_argument, 0, 'b'                     },
     {"terminal-log",                required_argument, 0, 't'                     },
     {"show-times",                  required_argument, 0, 'p'                     },
@@ -250,6 +251,7 @@ static int process_args(int argc, char **argv)
                     "H"
                     "W"
                     "i"
+                    "f"
                     "s"
                     "p"
                     "z:"
@@ -318,6 +320,11 @@ static int process_args(int argc, char **argv)
       fprintf(stderr,
               "enabling FIOM (Fence of I/O implies Memory) bit in menvcfg.\n");
       rv_enable_writable_fiom = true;
+    case 'f':
+      fprintf(stderr,
+              "enabling storing transformed instruction bits in mtinst and "
+              "htinst.\n");
+      rv_xtinst_has_transformed_inst = true;
       break;
     case 's':
       do_dump_dts = true;

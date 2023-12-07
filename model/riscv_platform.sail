@@ -500,19 +500,14 @@ function tick_platform() -> unit = {
 
 /* Platform-specific handling of instruction faults */
 
-function handle_illegal() -> unit = {
-  let e = E_Illegal_Instr();
-  let c = instr_exception_context(instbits, plat_mtval_has_illegal_inst_bits());
+function handle_instr_fault(e: ExceptionType) -> unit = {
+  let c = instr_exception_context(zero_extend(instbits), plat_mtval_has_illegal_inst_bits()) in
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
-/* Platform-specific handling of virtual instruction traps */
+function handle_illegal() -> unit = handle_instr_fault(E_Illegal_Instr()) // FIXME: Would be clearer if called 'handle_illegal_instr()'
 
-function handle_virtual_instr() -> unit = {
-  let e = E_Virtual_Instr();
-  let c = instr_exception_context(instbits, plat_mtval_has_illegal_inst_bits());
-  set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
-}
+function handle_virtual_instr() -> unit = handle_instr_fault(E_Virtual_Instr())
 
 /* Platform-specific wait-for-interrupt */
 

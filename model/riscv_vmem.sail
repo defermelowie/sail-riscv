@@ -1161,35 +1161,46 @@ union TR_Result('paddr : Type, 'exception : Type, 'context : Type) = {
   TR_Failure : ('exception, 'context, ext_ptw)
 }
 
-// Top-level addr-translation function
-// PUBLIC: invoked from instr-fetch and load/store/amo
-function translateAddr(vAddr   : xlenbits,
-                       ac      : AccessType(ext_access_type))
-                      -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
+// Addr-translation function for specific privilege & virtualization mode
+// PUBLIC: invoked from HLV, HSV and HLVX
+function translateAddr_pv(vAddr : xlenbits,
+                          ac    : AccessType(ext_access_type),
+                          priv  : Privilege,
+                          virt  : Virtualization)
+                          -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
   // Internally the vmem code works with 64-bit values, whether xlen==32 or xlen==64
   // This 'extend' is a no-op when xlen==64 and extends when xlen==32
   let vAddr_64b : bits(64) = zero_extend(vAddr);
-  // Effective privilege takes into account mstatus.MPRV, mstatus.MPP
-  // See riscv_sys_regs.sail for effectivePrivilege() and cur_privilege
-  let effPriv   : Privilege      = effectivePrivilege(ac, mstatus, cur_privilege);
-  // Effective virtualization takes into account mstatus.MPRV, mstatus.MPV
-  let effVirt   : Virtualization = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
   // PTW extensions (non-standard): initialize the PTW extension state
   let ext_ptw   : ext_ptw = init_ext_ptw;
 
-  if effVirt == V0 then
-    match translate_stage(vAddr_64b, ac, effPriv, S, ext_ptw) {
+  if virt == V0 then
+    match translate_stage(vAddr_64b, ac, priv, S, ext_ptw) {
       TRi_Address(pa, ext_ptw) => TR_Address(truncate(pa, sizeof(xlen)), ext_ptw),
       TRi_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), translationEContext(f, vAddr_64b), ext_ptw)
     }
   else
-    match translate_stage(vAddr_64b, ac, effPriv, VS, ext_ptw) {
-      TRi_Address(gpa, ext_ptw) => match translate_stage(gpa, ac, effPriv, G, ext_ptw){
+    match translate_stage(vAddr_64b, ac, priv, VS, ext_ptw) {
+      TRi_Address(gpa, ext_ptw) => match translate_stage(gpa, ac, priv, G, ext_ptw){
         TRi_Address(spa, ext_ptw) => TR_Address(truncate(spa, sizeof(xlen)), ext_ptw),
         TRi_Failure(f, ext_ptw)  => TR_Failure(convert_GStage_exception(translationException(ac, f), ac), translationEContext(f, vAddr_64b), ext_ptw)
       },
       TRi_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), translationEContext(f, vAddr_64b), ext_ptw)
     }
+}
+
+// Top-level addr-translation function
+// PUBLIC: invoked from instr-fetch and load/store/amo
+function translateAddr(vAddr   : xlenbits,
+                       ac      : AccessType(ext_access_type))
+                      -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
+  // Effective privilege takes into account mstatus.MPRV, mstatus.MPP
+  // See riscv_sys_regs.sail for effectivePrivilege() and cur_privilege
+  let effPriv   : Privilege      = effectivePrivilege(ac, mstatus, cur_privilege);
+  // Effective virtualization takes into account mstatus.MPRV, mstatus.MPV
+  let effVirt   : Virtualization = effectiveVirtualization(ac, mstatus, mstatush, cur_virtualization);
+
+  translateAddr_pv(vAddr, ac, effPriv, effVirt)
 }
 
 // ****************************************************************

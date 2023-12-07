@@ -82,6 +82,9 @@ let xlen_min_signed = 0 - 2 ^ (sizeof(xlen) - 1)
 type half = bits(16)
 type word = bits(32)
 
+/* max instruction length */
+type ilenbits = bits(32)
+
 /* register identifiers */
 
 type regidx  = bits(5)
@@ -195,6 +198,17 @@ union AccessType ('a : Type) = {
   ReadWrite : ('a, 'a),
   Execute   : unit
 }
+
+val AccessType_to_str : AccessType(ext_access_type) -> string
+function AccessType_to_str(ac) =
+  match ac {
+    Read(_)      => "R",
+    Write(_)     => "W",
+    ReadWrite(_) => "RW",
+    Execute(_)   => "E",
+  }
+
+overload to_str = {AccessType_to_str}
 
 enum word_width = {BYTE, HALF, WORD, DOUBLE}
 
@@ -410,6 +424,24 @@ function E_GPage_Fault_of_AccessType(a: AccessType(ext_access_type)) -> Exceptio
     ReadWrite(_) => E_SAMO_GPage_Fault(),
     Execute(_)   => E_Fetch_GPage_Fault(),
   }
+
+val exceptionType_update_AccessType : (ExceptionType, AccessType(ext_access_type)) -> ExceptionType
+function exceptionType_update_AccessType(e, a) =
+match(e) {
+  E_Fetch_Addr_Align()   => E_Addr_Align_of_AccessType(a),
+  E_Load_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+  E_SAMO_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+  E_Fetch_Access_Fault() => E_Access_Fault_of_AccessType(a),
+  E_Load_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+  E_SAMO_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+  E_Fetch_Page_Fault()   => E_Page_Fault_of_AccessType(a),
+  E_Load_Page_Fault()    => E_Page_Fault_of_AccessType(a),
+  E_SAMO_Page_Fault()    => E_Page_Fault_of_AccessType(a),
+  E_Fetch_GPage_Fault()  => E_GPage_Fault_of_AccessType(a),
+  E_Load_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+  E_SAMO_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+  _ => e /* Other exceptions are not access type specific */
+}
 
 /* Possible trap causes: either a synchronous exception or asynchronous interrupt */
 

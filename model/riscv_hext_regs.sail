@@ -162,6 +162,15 @@ function legalize_hedeleg(o: Medeleg, v: xlenbits) -> Medeleg = {
 /* TODO: Hypervisor Guest External Interrupt-Enable                 */
 
 /* **************************************************************** */
+/* Machine & Hypervisor trap information                            */
+
+register mtinst : xlenbits
+register mtval2 : xlenbits
+
+register htinst : xlenbits
+register htval  : xlenbits
+
+/* **************************************************************** */
 /* Hypervisor Guest Address Translation and Protection              */
 
 bitfield Hgatp64 : bits(64) = {

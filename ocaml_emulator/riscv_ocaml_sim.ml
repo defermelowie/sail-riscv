@@ -56,6 +56,9 @@ let options = Arg.align ([("-dump-dts",
                           ("-enable-writable-fiom",
                            Arg.Set P.config_enable_writable_fiom,
                            " enable FIOM (Fence of I/O implies Memory) bit in menvcfg");
+                          ("-xtinst-has-transformed-inst",
+                           Arg.Set P.config_xtinst_has_transformed_inst,
+                           " xtinst stores tranformed instruction bits");
                           ("-disable-rvc",
                            Arg.Clear P.config_enable_rvc,
                            " disable the RVC extension on boot");

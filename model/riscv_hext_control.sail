@@ -106,10 +106,10 @@ function clause ext_read_CSR(0x602) = Some(get_hedeleg()) /* hedeleg */
 // function clause ext_read_CSR(0x604) = Some() /* hie */
 // function clause ext_read_CSR(0x606) = Some() /* hcounteren */
 // function clause ext_read_CSR(0x607) = Some() /* hgeie */
-// function clause ext_read_CSR(0x643) = Some() /* htval */
+function clause ext_read_CSR(0x643) = Some(htval) /* htval */
 // function clause ext_read_CSR(0x644) = Some() /* hip */
 // function clause ext_read_CSR(0x645) = Some() /* hvip */
-// function clause ext_read_CSR(0x64A) = Some() /* htinst */
+function clause ext_read_CSR(0x64A) = Some(htinst) /* htinst */
 // function clause ext_read_CSR(0xE12) = Some() /* hgeip */
 // function clause ext_read_CSR(0x60A) = Some() /* henvcfg */
 // function clause ext_read_CSR(0x61A) = Some() /* henvcfgh */
@@ -128,9 +128,13 @@ function clause ext_read_CSR(0x243) = Some(get_vstval()) /* vstval */
 function clause ext_read_CSR(0x280) = Some(get_vsatp()) /* vsatp */
 
 /* H-ext CSR write handles */
+function clause ext_write_CSR(0x34A, value) = { mtinst = value; Some(mtinst) }
+function clause ext_write_CSR(0x34B, value) = { mtval2 = value; Some(mtval2) }
 function clause ext_write_CSR(0x600, value) = { hstatus = legalize_hstatus(hstatus, value); Some(get_hstatus()) }
 function clause ext_write_CSR(0x602, value) = { hedeleg = legalize_hedeleg(hedeleg, value); Some(get_hedeleg()) }
-/* write hgatp */ // See riscv_insts_zicsr.sail
+function clause ext_write_CSR(0x643, value) = { htval = value; Some(htval) }
+function clause ext_write_CSR(0x64A, value) = { htinst = value; Some(htinst) }
+/* write hgatp (0x680)*/ // See riscv_insts_zicsr.sail
 function clause ext_write_CSR(0x200, value) = { vsstatus = legalize_vsstatus(vsstatus, value); Some(get_vsstatus()) }
 function clause ext_write_CSR(0x205, value) = { Some(set_trap_vector(Supervisor, V1, value)) }
 function clause ext_write_CSR(0x240, value) = { vsscratch = value; Some(get_vsscratch()) }
@@ -141,8 +145,6 @@ function clause ext_write_CSR(0x280, value) = { vsatp = value; Some(get_vsatp())
 
 /* Initialize hypervisor extension */
 function init_hext() -> unit = {
-  assert(sys_enable_hext());
-
   /* Start with V=0 */
   cur_virtualization = V0;
 
@@ -159,7 +161,7 @@ function init_hext() -> unit = {
   mtinst = zero_extend(0b0);
   mtval2 = zero_extend(0b0);
 
-  /* TODO: mip */
+  // TODO: init mip
 
   mie = update_SGEI(mie, 0b0);
   mie = update_VSEI(mie, 0b0);
@@ -181,10 +183,10 @@ function init_hext() -> unit = {
   /* TODO: init hie */
   /* TODO: init hcounteren */
   /* TODO: init hgeie */
-  // htval->bits() = zero_extend(0b0);
+  htval = zero_extend(0b0);
+  htinst = zero_extend(0b0);
   /* TODO: init hip */
   /* TODO: init hvip */
-  // htinst->bits() = zero_extend(0b0);
   /* TODO: init hgeip */
   /* TODO: init henvcfg */
   /* TODO: init henvcfgh */
@@ -196,7 +198,6 @@ function init_hext() -> unit = {
 
   vsstatus->bits() = zero_extend(0b0);
   vsstatus = set_vsstatus_UXL(vsstatus, misa.MXL()); /* Dynamic XLEN changes are not (yet) supported */
-
   vstvec->bits() = zero_extend(0b0);
   vsscratch = zero_extend(0b0);
   vsepc = zero_extend(0b0);
@@ -221,9 +222,10 @@ function init_hext() -> unit = {
  *   [x] in VU-mode, attempts to access an implemented non-high-half supervisor CSR when the same access (read/write) would be allowed in HS-mode, assuming mstatus.TVM=0;
  *   [ ] in VU-mode, if XLEN=32, attempts to access an implemented high-half supervisor CSR when the same access to the CSR’s low-half
  *       partner would be allowed in HS-mode, assuming mstatus.TVM=0;
+ *   [ ] in VS-mode, attempts to access satp, when hstatus.VTVM=1
  */
- /* TODO: implement rest of the above cases for raising virtual instruction exception */
-function raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
+/* TODO: implement rest of the above cases for raising virtual instruction exception */
+function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
   if v == V0 then false
   else match p {
     Machine => internal_error(__FILE__, __LINE__, "illegal privilege mode"),
@@ -231,8 +233,11 @@ function raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isW
       let csr_rw = csr[11..10];
       let csr_p  = csr[9..8];
 
-      if not(isWrite == true & csr_rw== 0b11) & (csr_p <=_u 0b10) /* HS-access allowed? */
+      // print("csr_access_raises_virtual_instr: VS-mode, " ^ (if isWrite then "Write" else "Read") ^ ", " ^ csr_name(csr));
+
+      if not(isWrite == true & csr_rw == 0b11) & (csr_p <=_u 0b10) /* HS-access allowed? */
       then match (csr_rw, csr_p) {
+        (_, 0b01) => true,  /* Supervisor CSR accesses from VS-mode that are disabled by CSRs */
         (_, 0b10) => true,  /* Hypervisor or VS CSR accesses from VS-mode */
         (_, _)    => false,
       } else false

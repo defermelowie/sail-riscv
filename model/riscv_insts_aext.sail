@@ -146,7 +146,7 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) = {
         if not(aligned)
         then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
         else match translateAddr(vaddr, Read(Data)) {
-               TR_Failure(e, c, _)    => { handle_exception(e, c); RETIRE_FAIL },
+               TR_Failure(e, c, _) => { handle_exception(e, c); RETIRE_FAIL },
                TR_Address(addr, _) =>
                  match (width, sizeof(xlen)) {
                    (BYTE, _)    => process_loadres(rd, vaddr, mem_read(Read(Data), addr, 1, aq, aq & rl, true), false),

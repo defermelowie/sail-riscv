@@ -72,6 +72,11 @@ bool plat_mtval_has_illegal_inst_bits(unit u)
   return rv_mtval_has_illegal_inst_bits;
 }
 
+bool plat_xtinst_has_transformed_inst(unit u)
+{
+  return rv_xtinst_has_transformed_inst;
+}
+
 bool plat_enable_pmp(unit u)
 {
   return rv_enable_pmp;

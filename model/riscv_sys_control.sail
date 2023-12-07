@@ -182,8 +182,12 @@ function check_CSR_access(csrrw, csrpr, p, v, isWrite) = {
   check_priv & check_RW
 }
 
-function check_TVM_SATP(csr : csreg, p : Privilege) -> bool =
-  not(csr == 0x180 & p == Supervisor & mstatus.TVM() == 0b1)
+function check_TVM_SATP(csr : csreg, p : Privilege, v: Virtualization) -> bool =
+  match (p, v) {
+    (Supervisor, V0) => not(csr == 0x180 & mstatus.TVM() == 0b1),
+    (Supervisor, V1) => not(csr == 0x180 & hstatus.VTVM() == 0b1),
+    (_, _)           => true
+  }
 
 function check_Counteren(csr : csreg, p : Privilege) -> bool =
   match(csr, p) {
@@ -223,7 +227,7 @@ function check_seed_CSR (csr : csreg, p : Privilege, isWrite : bool) -> bool = {
 function check_CSR(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool =
     is_CSR_defined(csr, p)
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, v, isWrite)
-  & check_TVM_SATP(csr, p)
+  & check_TVM_SATP(csr, p, v)
   & check_Counteren(csr, p)
   & check_seed_CSR(csr, p, isWrite)
 
@@ -410,14 +414,23 @@ union ctl_result = {
   CTL_URET : unit
 }
 
-/* trap value */
-
-function tval(excinfo : option(xlenbits)) -> xlenbits = {
-  match (excinfo) {
-    Some(e) => e,
-    None()  => zero_extend(0b0)
+/* Is it legal for mtinst or htinst to hold a tranformed instruction on a given fault */
+function exc_causes_transformed_inst_in_xtinst(e : ExceptionType) -> bool =
+  match e {
+    E_Load_Addr_Align()   => true,
+    E_Load_Access_Fault() => true,
+    E_SAMO_Addr_Align()   => true,
+    E_SAMO_Access_Fault() => true,
+    E_Load_Page_Fault()   => true,
+    E_SAMO_Page_Fault()   => true,
+    E_Load_GPage_Fault()  => true,
+    E_SAMO_GPage_Fault()  => true,
+    _                     => false,
   }
-}
+
+val plat_xtinst_has_transformed_inst = {ocaml: "Platform.xtinst_has_transformed_inst",
+                                        c: "plat_xtinst_has_transformed_inst",
+                                        _: "plat_xtinst_has_transformed_inst"} : unit -> bool
 
 $ifdef RVFI_DII
 val rvfi_trap : unit -> unit
@@ -434,8 +447,9 @@ $endif
 function trap_handler(del_priv : Privilege, del_virt : Virtualization, pc : xlenbits, cause : TrapCause, context : ExceptionContext)
                      -> xlenbits = {
   rvfi_trap();
+
   if   get_config_print_platform()
-  then print_platform("handling " ^ to_str(cause)
+  then print_platform("handling " ^ trapCause_to_str(cause)
                       ^ " at priv " ^ to_str(del_priv, del_virt)
                       ^ " with tval " ^ BitStr(some_or_zero(context.excinfo))
                       ^ " and tinst " ^ BitStr(some_or_zero(context.excinst)));
@@ -523,7 +537,6 @@ function trap_handler(del_priv : Privilege, del_virt : Virtualization, pc : xlen
           Supervisor => 0b1,
           Machine => internal_error(__FILE__, __LINE__, "invalid privilege for vs-mode trap")
         };
-
         vstval = some_or_zero(context.excinfo);
 
         cur_privilege   = del_priv;
@@ -563,7 +576,9 @@ function trap_handler(del_priv : Privilege, del_virt : Virtualization, pc : xlen
   };
 }
 
-function exception_handler(cur_priv : Privilege, cur_virt: Virtualization, ctl : ctl_result,
+function exception_handler(cur_priv : Privilege,
+                           cur_virt: Virtualization,
+                           ctl : ctl_result,
                            pc: xlenbits) -> xlenbits = {
   match (cur_priv, ctl) {
     (_, CTL_TRAP(e, c)) => {
@@ -665,10 +680,9 @@ function handle_exception(e: ExceptionType, c: ExceptionContext) -> unit = {
 }
 
 function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
-  let c : ExceptionContext = struct { excinfo  = Some(addr),
-                                      excinfo2 = None(),
-                                      excinst  = None(),
-                                      ext      = None() } in
+  let c = {mem_exception_context(addr) with excinst = if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
+                                                      then Some(zero_extend(instbits_transformed))
+                                                      else None()} in
   handle_exception(e, c)
 }
 
@@ -691,10 +705,6 @@ function init_sys() -> unit = {
   misa->S()   = 0b1;                             /* supervisor-mode */
   misa->V()   = bool_to_bits(sys_enable_vext()); /* vector extension */
   misa->H()   = bool_to_bits(sys_enable_hext()); /* hypervisor extension */
-
-  if   sys_enable_fdext() & sys_enable_zfinx()
-  then internal_error(__FILE__, __LINE__, "F and Zfinx cannot both be enabled!");
-
   /* We currently support both F and D */
   misa->F()   = bool_to_bits(sys_enable_fdext());      /* single-precision */
   misa->D()   = if   sizeof(flen) >= 64

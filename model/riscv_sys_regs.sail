@@ -75,6 +75,7 @@
 register cur_privilege : Privilege
 
 /* current instruction bits, used for illegal instruction exceptions */
+/* FIXME: Is cur_inst a duplicate of instbits from riscv_regs.sail?   */
 
 register cur_inst : xlenbits
 
@@ -598,10 +599,7 @@ function pc_alignment_mask() -> xlenbits =
 /* auxiliary exception registers */
 
 register mtval    : xlenbits
-register mtval2   : xlenbits /* Defined by hypervisor extension */
 register mscratch : xlenbits
-register mtinst   : xlenbits /* Defined by hypervisor extension */
-
 /* counters */
 
 bitfield Counteren : bits(32) = {
