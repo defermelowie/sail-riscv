@@ -228,11 +228,11 @@ function clause enc_transformed(STORECON(aq, rl, rs2, _, size, rd), addr_offset)
 function clause enc_transformed(AMO(op, aq, rl, rs2, _, size, rd), addr_offset) =
   encdec_amoop(op) @ bool_bits(aq) @ bool_bits(rl) @ rs2 @ addr_offset @ 0b0 @ size_bits(size) @ rd @ 0b0101111
 
-// function clause enc_transformed(HLV(width, is_unsigned, _, rd), addr_offset) =
-//   0b0110 @ size_bits(width) @ 0b0 @ 0b0000 @ bool_bits(is_unsigned) @ addr_offset @ 0b100 @ rd @ 0b1110011
+function clause enc_transformed(HLV(width, is_unsigned, _, rd), addr_offset) =
+  0b0110 @ size_bits(width) @ 0b0 @ 0b0000 @ bool_bits(is_unsigned) @ addr_offset @ 0b100 @ rd @ 0b1110011
 
-// function clause enc_transformed(HSV(width, _, rs2), addr_offset) =
-//   0b0110 @ size_bits(width) @ 0b1 @ rs2 @ addr_offset @ 0b100 @ 0b00000 @ 0b1110011
+function clause enc_transformed(HSV(width, _, rs2), addr_offset) =
+  0b0110 @ size_bits(width) @ 0b1 @ rs2 @ addr_offset @ 0b100 @ 0b00000 @ 0b1110011
 
-// function clause enc_transformed(HLVX(width, _, rd), addr_offset) =
-//   0b0110 @ size_bits(width) @ 0b0 @ 0b00011 @ addr_offset @ 0b100 @ rd @ 0b1110011
+function clause enc_transformed(HLVX(width, _, rd), addr_offset) =
+  0b0110 @ size_bits(width) @ 0b0 @ 0b00011 @ addr_offset @ 0b100 @ rd @ 0b1110011
