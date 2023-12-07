@@ -935,7 +935,7 @@ function clause execute SFENCE_VMA(rs1, rs2) = {
   };
   match sfence_exc {
     Some(e) => { handle_instr_fault(e); RETIRE_FAIL },
-    None()  => { flush_TLB(asid, addr); RETIRE_SUCCESS },
+    None()  => { flush_TLB(asid, S, addr); RETIRE_SUCCESS },
   }
 }
 

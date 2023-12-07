@@ -676,14 +676,17 @@ function exception_handler(cur_priv : Privilege,
 }
 
 function handle_exception(e: ExceptionType, c: ExceptionContext) -> unit = {
+  // If excinst is None, check if transformed inst should be written
+  let c = {c with excinst = if c.excinst != None()
+                            then c.excinst
+                            else if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
+                            then Some(zero_extend(instbits_transformed))
+                            else None()} in
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
 function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
-  let c = {mem_exception_context(addr) with excinst = if (plat_xtinst_has_transformed_inst() & exc_causes_transformed_inst_in_xtinst(e))
-                                                      then Some(zero_extend(instbits_transformed))
-                                                      else None()} in
-  handle_exception(e, c)
+  handle_exception(e, mem_exception_context(addr))
 }
 
 function handle_interrupt(i : InterruptType, del_priv : Privilege, del_virt: Virtualization) -> unit =

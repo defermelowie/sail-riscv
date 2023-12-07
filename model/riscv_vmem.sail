@@ -948,7 +948,7 @@ function translate_TLB_hit(sv_params : SV_Params,
               // Writeback the PTE (which has new A/D bits)
               n_ent : TLB_Entry = ent;
               n_ent.pte = pte';
-              write_TLB(tlb_index, n_ent);
+              write_TLB(tlb_index, n_ent, stage);
               let pte_phys_addr : xlenbits = ent.pteAddr[(sizeof(xlen) - 1) .. 0];
               let mv = mem_write_value_priv(pte_phys_addr,
                                             8,
@@ -991,7 +991,7 @@ function translate_TLB_miss(sv_params : SV_Params,
       // by: 'TRi_Address(pAddr, ext_ptw)'    (see TLB_NOTE above)
       match update_PTE_Bits(sv_params, pte, ac, ext_pte) {
         None() => {
-          add_to_TLB(xxid, vAddr, pAddr, pte, pteAddr, level, global,
+          add_to_TLB(xxid, stage, vAddr, pAddr, pte, pteAddr, level, global,
                      sv_params.vpn_size_bits,    // TODO: ppn_size_bits?
                      PAGESIZE_BITS);
           TRi_Address(pAddr, ext_ptw)
@@ -1013,7 +1013,7 @@ function translate_TLB_miss(sv_params : SV_Params,
                                           false);
             match mv {
               MemValue(_) => {
-                add_to_TLB(xxid, vAddr, pAddr, pte', pteAddr, level, global,
+                add_to_TLB(xxid, stage, vAddr, pAddr, pte', pteAddr, level, global,
                            sv_params.vpn_size_bits,    // TODO: ppn_size_bits?
                            PAGESIZE_BITS);
                 TRi_Address(pAddr, ext_ptw)
@@ -1063,7 +1063,7 @@ function translate_stage(vAddr,
   match stage {
     S  => {
       mode = translationMode(priv, stage);
-      print("[DEBUG] Using " ^ to_str(mode) ^ " for S-stage address translation"); /* Debug: Print address translation mode */
+      // print("[DEBUG] Using " ^ to_str(mode) ^ " for S-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
@@ -1093,7 +1093,7 @@ function translate_stage(vAddr,
     },
     VS => {
       mode = translationMode(priv, stage);
-      print("[DEBUG] Using " ^ to_str(mode) ^ " for VS-stage address translation"); /* Debug: Print address translation mode */
+      // print("[DEBUG] Using " ^ to_str(mode) ^ " for VS-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
@@ -1123,7 +1123,7 @@ function translate_stage(vAddr,
     },
     G  => {
       mode = translationMode(priv, stage);
-      print("[DEBUG] Using " ^ to_str(mode) ^ " for G-stage address translation"); /* Debug: Print address translation mode */
+      // print("[DEBUG] Using " ^ to_str(mode) ^ " for G-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32x4  => (true,                                 sv32x4_params),

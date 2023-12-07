@@ -145,9 +145,8 @@ function clause execute HFENCE_VVMA(rs1, rs2) = {
     (User, V1)       => { handle_virtual_instr(); RETIRE_FAIL },
     (User, V0)       => { handle_illegal(); RETIRE_FAIL },
     (Supervisor, V1) => { handle_virtual_instr(); RETIRE_FAIL },
-    /* TLB is shared between S-stage & VS-stage address translation */
-    (Supervisor, V0) => { flush_TLB(asid, addr); RETIRE_SUCCESS },
-    (Machine, _)     => { flush_TLB(asid, addr); RETIRE_SUCCESS }
+    (Supervisor, V0) => { flush_TLB(asid, VS, addr); RETIRE_SUCCESS },
+    (Machine, _)     => { flush_TLB(asid, VS, addr); RETIRE_SUCCESS }
   }
 }
 
@@ -170,9 +169,9 @@ function clause execute HFENCE_GVMA(rs1, rs2) = {
     (Supervisor, V1) => { handle_virtual_instr(); RETIRE_FAIL },
     (Supervisor, V0) => match mstatus.TVM() {
       0b1 => { handle_illegal(); RETIRE_FAIL },
-      0b0 => { /* TODO: implement hfence.gvma */ RETIRE_SUCCESS }
+      0b0 => { flush_TLB(vmid, G, addr); RETIRE_SUCCESS }
       },
-    (Machine, _)    => { /* TODO: implement hfence.gvma */ RETIRE_SUCCESS }
+    (Machine, _)    => { flush_TLB(vmid, G, addr); RETIRE_SUCCESS }
   }
 }
 

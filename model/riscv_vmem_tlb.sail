@@ -87,17 +87,27 @@ struct TLB_Entry = {
   age        : bits(64)   // for replacement policy?
 }
 
-// Single-entry TLB (could enlarge this in future for better simulation speed)
+// Single-entry TLBs (could enlarge this in future for better simulation speed)
+// There is one TLB per stage (H-extension) in order to model HFENCE instructions
 // PRIVATE
-register tlb : option(TLB_Entry) = None()
+register tlb_S  : option(TLB_Entry) = None()
+register tlb_VS : option(TLB_Entry) = None()
+register tlb_G  : option(TLB_Entry) = None()
 
 // PUBLIC: invoked in init_vmem() [riscv_vmem.sail]
-function init_TLB() -> unit =
-  tlb = None()
+function init_TLB() -> unit = {
+  tlb_S  = None();
+  tlb_VS = None();
+  tlb_G  = None();
+}
 
 // PUBLIC: invoked in translate_TLB_hit() [riscv_vmem.sail]
-function write_TLB(idx : nat, ent : TLB_Entry) -> unit =
-  tlb = Some(ent)
+function write_TLB(idx : nat, ent : TLB_Entry, stage : AddressTranslationStage) -> unit =
+  match stage {
+    S  => tlb_S  = Some(ent),
+    VS => tlb_VS = Some(ent),
+    G  => tlb_G  = Some(ent),
+  }
 
 // PRIVATE
 function match_TLB_Entry(ent   : TLB_Entry,
@@ -121,14 +131,19 @@ function flush_TLB_Entry(e    : TLB_Entry,
 
 // PUBLIC: invoked in translate() [riscv_vmem.sail]
 function lookup_TLB (asid : bits(16), stage : AddressTranslationStage, vaddr : bits(64)) -> option((nat, TLB_Entry)) =
-  None() // Fixme: Return TLB match  based on stage (one TLB per stage)
-  // match tlb {
-  //   None()  => None(),
-  //   Some(e) => if match_TLB_Entry(e, asid, vaddr) then Some((0, e)) else None()
-  // }
+  let tlb : option(TLB_Entry) = match stage {
+    S  => tlb_S,
+    VS => tlb_VS,
+    G  => tlb_G,
+  } in
+  match tlb {
+    None()  => None(),
+    Some(e) => if match_TLB_Entry(e, asid, vaddr) then Some((0, e)) else None()
+  }
 
 // PRIVATE
 function add_to_TLB(asid          : bits(16),
+                    stage         : AddressTranslationStage,
                     vAddr         : bits(64),
                     pAddr         : bits(64),
                     pte           : bits(64),
@@ -150,12 +165,17 @@ function add_to_TLB(asid          : bits(16),
                                        vAddr      = vAddr & vMatchMask,
                                        pAddr      = shiftl(shiftr(pAddr, shift), shift),
                                        age        = mcycle};
-  tlb = Some(entry)
+  match stage {
+    S  => tlb_S  = Some(entry),
+    VS => tlb_VS = Some(entry),
+    G  => tlb_G  = Some(entry),
+  }
 }
 
 // Top-level TLB flush function
 // PUBLIC: invoked from exec SFENCE_VMA
 function flush_TLB(asid_xlen : option(xlenbits),
+                   stage     : AddressTranslationStage,
                    addr_xlen : option(xlenbits)) -> unit = {
   let asid : option(bits(16)) =
     match asid_xlen {
@@ -167,10 +187,18 @@ function flush_TLB(asid_xlen : option(xlenbits),
       None() => None(),
       Some(a) => Some(zero_extend(a))
     };
+  let tlb : option(TLB_Entry) = match stage {
+    S  => tlb_S,
+    VS => tlb_VS,
+    G  => tlb_G,
+  } in
   match tlb {
-    None()  => (),
-    Some(e) => if   flush_TLB_Entry(e, asid, addr_64b)
-               then tlb = None()
-               else ()
+    None()   => (),
+    Some(e)  => match (flush_TLB_Entry(e, asid, addr_64b), stage) {
+                  (false, _) => (),
+                  (_,     S) => tlb_S  = None(),
+                  (_,    VS) => tlb_VS = None(),
+                  (_,     G) => tlb_G  = None(),
+                }
   }
 }
