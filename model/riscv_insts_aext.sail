@@ -146,7 +146,7 @@ function clause execute(LOADRES(aq, rl, rs1, width, rd)) = {
         if not(aligned)
         then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
         else match translateAddr(vaddr, Read(Data)) {
-               TR_Failure(e, _)    => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+               TR_Failure(e, c, _)    => { handle_exception(e, c); RETIRE_FAIL },
                TR_Address(addr, _) =>
                  match (width, sizeof(xlen)) {
                    (BYTE, _)    => process_loadres(rd, vaddr, mem_read(Read(Data), addr, 1, aq, aq & rl, true), false),
@@ -210,7 +210,7 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
             } else {
               match translateAddr(vaddr, Write(Data)) {  /* Write and ReadWrite are equivalent here:
                                                           * both result in a SAMO exception */
-                TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+                TR_Failure(e, c, _) => { handle_exception(e, c); RETIRE_FAIL },
                 TR_Address(addr, _) => {
                   let eares : MemoryOpResult(unit) = match (width, sizeof(xlen)) {
                     (BYTE, _)    => mem_write_ea(addr, 1, aq & rl, rl, true),
@@ -282,7 +282,7 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
       Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
       Ext_DataAddr_OK(vaddr) => {
         match translateAddr(vaddr, ReadWrite(Data, Data)) {
-          TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
+          TR_Failure(e, c, _) => { handle_exception(e, c); RETIRE_FAIL },
           TR_Address(addr, _) => {
             let eares : MemoryOpResult(unit) = match (width, sizeof(xlen)) {
               (BYTE, _)    => mem_write_ea(addr, 1, aq & rl, rl, true),

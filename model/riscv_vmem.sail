@@ -276,7 +276,7 @@ let sv48x4_params : SV_Params = struct {
 }
 
 // For future; not currently used
-// /*
+/*
 // PRIVATE
 let sv57_params : SV_Params = struct {
        // SATP CSR
@@ -658,7 +658,6 @@ function translationMode(priv : Privilege, stage : AddressTranslationStage) -> A
   }
 }
 
-
 // ****************************************************************
 // Results of Page Table Walk (PTW)
 
@@ -667,14 +666,15 @@ function translationMode(priv : Privilege, stage : AddressTranslationStage) -> A
 // Failure modes for address-translation/page-table-walks
 // PRIVATE
 union PTW_Error = {
-  PTW_Invalid_Addr  : unit,          // invalid source address
-  PTW_Access        : unit,          // physical memory access error for a PTE
+  PTW_Invalid_Addr  : unit,                      // invalid source address
+  PTW_Access        : unit,                      // physical memory access error for a PTE
   PTW_Invalid_PTE   : unit,
   PTW_No_Permission : unit,
-  PTW_Misaligned    : unit,          // misaligned superpage
-  PTW_PTE_Update    : unit,          // PTE update needed but not enabled
-  PTW_Implicit      : ExceptionType, // error during implicit access of VS-stage translation structures
-  PTW_Ext_Error     : ext_ptw_error  // parameterized for errors from extensions
+  PTW_Misaligned    : unit,                      // misaligned superpage
+  PTW_PTE_Update    : unit,                      // PTE update needed but not enabled
+  // Note: Idealy we could use 'PTW_Implicit : (PTW_Error, bits(64))' but recursive types are not allowed
+  PTW_Implicit      : (ExceptionType, bits(64)), // error during implicit access/page-walk of G-stage translation structures
+  PTW_Ext_Error     : ext_ptw_error              // parameterized for errors from extensions
 }
 
 // PRIVATE: only 'to_str' overload is public
@@ -686,7 +686,7 @@ function ptw_error_to_str(e : PTW_Error) -> string = {
     PTW_No_Permission()  => "no-permission",
     PTW_Misaligned()     => "misaligned-superpage",
     PTW_PTE_Update()     => "pte-update-needed",
-    PTW_Implicit(_)      => "implicit-access-error",
+    PTW_Implicit(_, _)   => "implicit-access-error",
     PTW_Ext_Error(e)     => "extension-error"
   }
 }
@@ -703,12 +703,13 @@ function ext_get_ptw_error(eptwf : ext_ptw_fail) -> PTW_Error =
   PTW_No_Permission()
 
 // Convert translation/PTW failures into architectural exceptions
+// PRIVATE
 function translationException(a : AccessType(ext_access_type),
                               f : PTW_Error)
-                             -> ExceptionType = {
+                              -> ExceptionType = {
   match (a, f) {
     (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
-    (_, PTW_Implicit(e))         => exceptionType_update_AccessType(e, a),
+    (_, PTW_Implicit(e, _))      => e, // No recursive types => just return the enclosed ExceptionType
     (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
     (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
     (Read(_), PTW_Access())      => E_Load_Access_Fault(),
@@ -717,6 +718,18 @@ function translationException(a : AccessType(ext_access_type),
     (Write(_), _)                => E_SAMO_Page_Fault(),
     (Execute(), PTW_Access())    => E_Fetch_Access_Fault(),
     (Execute(), _)               => E_Fetch_Page_Fault()
+  }
+}
+
+// Build architectural exception context for translation/PTW failures
+// PRIVATE
+function translationEContext(f     : PTW_Error,
+                             vaddr : bits(64))
+                             -> ExceptionContext = {
+  match f {
+    PTW_Ext_Error(e)         => ext_exception_context(e),
+    PTW_Implicit(e, gpaddr)  => vmem_exception_context(truncate(vaddr, sizeof(xlen)), Some(truncate(gpaddr, sizeof(xlen)))),
+    _                        => vmem_exception_context(truncate(vaddr, sizeof(xlen)), None()),
   }
 }
 
@@ -729,14 +742,12 @@ union PTW_Result = {
 // ****************************************************************
 // Translate VA -> PA (S-stage), VA -> GPA (VS-stage) or GPA -> SPA(G-stage)
 
-// Result of address translation
-
-// PUBLIC
-union TR_Result('paddr : Type, 'failure : Type) = {
-  TR_Address : ('paddr, ext_ptw),
-  TR_Failure : ('failure, ext_ptw)
+// Result of Address Translation (for internal, private functions)
+// PRIVATE
+union TRi_Result = {
+  TRi_Address : (bits(64), ext_ptw),
+  TRi_Failure : (PTW_Error, ext_ptw)
 }
-
 
 // Note: translate_stage is used for translation of implicit accesses during page walk
 //       => 'val' declaration should occur before 'function' definition of pt_walk,
@@ -748,7 +759,34 @@ val translate_stage : (bits(64),                    // virtual address
                        Privilege,                   // Machine/Supervisor/User
                        AddressTranslationStage,     // S/VS/G
                        ext_ptw                      // ext_ptw
-                      ) -> TR_Result(bits(64), PTW_Error)
+                      ) -> TRi_Result
+
+// Note: Since PTW_Implicit holds an ExceptionType, 'convert_GStage_exception' is used
+//       inside 'pt_walk' which dictates that it is defined before 'pt_walk'
+
+// Convert exceptions resulting from G-stage page walks to architectural exceptions:
+//   - Guest-page-fault exceptions are raised instead of regular page-walk exceptions
+//   - Any exception is always reported for the original access type
+// PRIVATE
+function convert_GStage_exception(e : ExceptionType,
+                                  a : AccessType(ext_access_type))
+                                  -> ExceptionType = {
+  match(e) {
+    E_Fetch_Addr_Align()   => E_Addr_Align_of_AccessType(a),
+    E_Load_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+    E_SAMO_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+    E_Fetch_Access_Fault() => E_Access_Fault_of_AccessType(a),
+    E_Load_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+    E_SAMO_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+    E_Fetch_Page_Fault()   => E_GPage_Fault_of_AccessType(a),
+    E_Load_Page_Fault()    => E_GPage_Fault_of_AccessType(a),
+    E_SAMO_Page_Fault()    => E_GPage_Fault_of_AccessType(a),
+    E_Fetch_GPage_Fault()  => E_GPage_Fault_of_AccessType(a),
+    E_Load_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+    E_SAMO_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+    _ => e // Other exceptions are not access type specific
+  }
+}
 
 // ****************************************************************
 // Page Table Walk (PTW)
@@ -785,8 +823,8 @@ function pt_walk(sv_params,
   let pte_addr   = pt_base + pte_offset;
   let pte_phys_addr : xlenbits = match stage {
     VS => match translate_stage(pte_addr, Read(Data), User, G, ext_ptw) {
-      TR_Address(pte_pa, ext_ptw) => pte_pa[(sizeof(xlen) - 1) .. 0],
-      TR_Failure(pte_e, ext_ptw)  => return PTW_Failure(PTW_Implicit(translationException(ac, pte_e)), ext_ptw), // FIXME: Promote PF to GPF
+      TRi_Address(pte_pa, ext_ptw) => pte_pa[(sizeof(xlen) - 1) .. 0],
+      TRi_Failure(f, ext_ptw)  => return PTW_Failure(PTW_Implicit(convert_GStage_exception(translationException(ac, f), ac), pte_addr), ext_ptw),
     },
     _  => pte_addr[(sizeof(xlen) - 1) .. 0]
   };
@@ -884,7 +922,7 @@ function translate_TLB_hit(sv_params : SV_Params,
                            ext_ptw   : ext_ptw,
                            tlb_index : nat,
                            ent       : TLB_Entry)
-                          -> TR_Result(bits(64), PTW_Error) = {
+                          -> TRi_Result = {
   let pte       = ent.pte;
   let ext_pte   = msbs_of_PTE(sv_params, pte);
   let pte_check = check_PTE_permission(ac, priv, mxr, do_sum,
@@ -894,18 +932,18 @@ function translate_TLB_hit(sv_params : SV_Params,
                                        R_of_PTE(pte),
                                        ext_pte,
                                        ext_ptw);
-  let tr_result : TR_Result(bits(64), PTW_Error)
+  let tr_result : TRi_Result
   = match pte_check {
       PTE_Check_Failure(ext_ptw, ext_ptw_fail) =>
-        TR_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw),
+        TRi_Failure(ext_get_ptw_error(ext_ptw_fail), ext_ptw),
       PTE_Check_Success(ext_ptw) =>
         match update_PTE_Bits(sv_params, pte, ac, ext_pte) {
-          None()     => TR_Address(ent.pAddr | (vAddr & ent.vAddrMask), ext_ptw),
+          None()     => TRi_Address(ent.pAddr | (vAddr & ent.vAddrMask), ext_ptw),
           Some(pte') =>
             // See riscv_platform.sail
             if not(plat_enable_dirty_update()) then
               // pte needs dirty/accessed update but that is not enabled
-              TR_Failure(PTW_PTE_Update(), ext_ptw)
+              TRi_Failure(PTW_PTE_Update(), ext_ptw)
             else {
               // Writeback the PTE (which has new A/D bits)
               n_ent : TLB_Entry = ent;
@@ -924,7 +962,7 @@ function translate_TLB_hit(sv_params : SV_Params,
                 MemException(e) => internal_error(__FILE__, __LINE__,
                                                   "invalid physical address in TLB")
               };
-              TR_Address(ent.pAddr | (vAddr & ent.vAddrMask), ext_ptw)
+              TRi_Address(ent.pAddr | (vAddr & ent.vAddrMask), ext_ptw)
             }
         }
     };
@@ -942,27 +980,27 @@ function translate_TLB_miss(sv_params : SV_Params,
                             mxr       : bool,
                             do_sum    : bool,
                             level     : nat,
-                            ext_ptw   : ext_ptw) -> TR_Result(bits(64), PTW_Error) = {
+                            ext_ptw   : ext_ptw) -> TRi_Result = {
   let ptw_result = pt_walk(sv_params, stage, vAddr, ac, priv, mxr, do_sum,
                            ptb, level, false, ext_ptw);
   match ptw_result {
-    PTW_Failure(f, ext_ptw) => TR_Failure(f, ext_ptw),
+    PTW_Failure(f, ext_ptw) => TRi_Failure(f, ext_ptw),
     PTW_Success(pAddr, pte, pteAddr, level, global, ext_ptw) => {
       let ext_pte   = msbs_of_PTE(sv_params, pte);
       // Without TLBs, this 'match' expression can be replaced simply
-      // by: 'TR_Address(pAddr, ext_ptw)'    (see TLB_NOTE above)
+      // by: 'TRi_Address(pAddr, ext_ptw)'    (see TLB_NOTE above)
       match update_PTE_Bits(sv_params, pte, ac, ext_pte) {
         None() => {
           add_to_TLB(xxid, vAddr, pAddr, pte, pteAddr, level, global,
                      sv_params.vpn_size_bits,    // TODO: ppn_size_bits?
                      PAGESIZE_BITS);
-          TR_Address(pAddr, ext_ptw)
+          TRi_Address(pAddr, ext_ptw)
         },
         Some(pte') =>
           // See riscv_platform.sail
           if not(plat_enable_dirty_update()) then
             // pte needs dirty/accessed update but that is not enabled
-            TR_Failure(PTW_PTE_Update(), ext_ptw)
+            TRi_Failure(PTW_PTE_Update(), ext_ptw)
           else {
             // Writeback the PTE (which has new A/D bits)
             let pte_phys_addr : xlenbits = pteAddr[(sizeof(xlen) - 1) .. 0];
@@ -978,10 +1016,10 @@ function translate_TLB_miss(sv_params : SV_Params,
                 add_to_TLB(xxid, vAddr, pAddr, pte', pteAddr, level, global,
                            sv_params.vpn_size_bits,    // TODO: ppn_size_bits?
                            PAGESIZE_BITS);
-                TR_Address(pAddr, ext_ptw)
+                TRi_Address(pAddr, ext_ptw)
               },
               MemException(e) =>
-                TR_Failure(PTW_Access(), ext_ptw)
+                TRi_Failure(PTW_Access(), ext_ptw)
             }
           }
         }
@@ -1001,7 +1039,7 @@ function translate(sv_params : SV_Params,
                    do_sum    : bool,
                    level     : nat,
                    ext_ptw   : ext_ptw)
-                   -> TR_Result(bits(64), PTW_Error) = {
+                   -> TRi_Result = {
   let one_64b  : bits(64) = zero_extend(0b1);
   let va_mask = (one_64b << sv_params.va_size_bits) - 1;
   let vAddr   = (vAddr_arg & va_mask);
@@ -1027,7 +1065,7 @@ function translate_stage(vAddr,
       mode = translationMode(priv, stage);
       print("[DEBUG] Using " ^ to_str(mode) ^ " for S-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
-        Bare => return TR_Address(vAddr, ext_ptw),
+        Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
         Sv39  => (is_valid_vAddr(sv39_params, vAddr), sv39_params),
         Sv48  => (is_valid_vAddr(sv48_params, vAddr), sv48_params),
@@ -1035,7 +1073,7 @@ function translate_stage(vAddr,
         _     => internal_error(__FILE__, __LINE__, "Invalid S-stage address translation mode")
       };
       if not(valid_va) then
-        TR_Failure(PTW_Invalid_Addr(), ext_ptw)
+        TRi_Failure(PTW_Invalid_Addr(), ext_ptw)
       else {
         let mxr    : bool     = mstatus.MXR() == 0b1;
         let do_sum : bool     = mstatus.SUM() == 0b1;
@@ -1057,7 +1095,7 @@ function translate_stage(vAddr,
       mode = translationMode(priv, stage);
       print("[DEBUG] Using " ^ to_str(mode) ^ " for VS-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
-        Bare => return TR_Address(vAddr, ext_ptw),
+        Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
         Sv39  => (is_valid_vAddr(sv39_params, vAddr), sv39_params),
         Sv48  => (is_valid_vAddr(sv48_params, vAddr), sv48_params),
@@ -1065,7 +1103,7 @@ function translate_stage(vAddr,
         _     => internal_error(__FILE__, __LINE__, "Invalid VS-stage address translation mode")
       };
       if not(valid_va) then
-        TR_Failure(PTW_Invalid_Addr(), ext_ptw)
+        TRi_Failure(PTW_Invalid_Addr(), ext_ptw)
       else {
         let mxr    : bool     = mstatus.MXR() == 0b1 | vsstatus.MXR() == 0b1; // HS-level MXR overwrites VS-stage page protections
         let do_sum : bool     = vsstatus.SUM() == 0b1;
@@ -1087,7 +1125,7 @@ function translate_stage(vAddr,
       mode = translationMode(priv, stage);
       print("[DEBUG] Using " ^ to_str(mode) ^ " for G-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
-        Bare => return TR_Address(vAddr, ext_ptw),
+        Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32x4  => (true,                                 sv32x4_params),
         Sv39x4  => (is_valid_vAddr(sv39x4_params, vAddr), sv39x4_params),
         Sv48x4  => (is_valid_vAddr(sv48x4_params, vAddr), sv48x4_params),
@@ -1095,7 +1133,7 @@ function translate_stage(vAddr,
         _       => internal_error(__FILE__, __LINE__, "Invalid G-stage address translation mode")
       };
       if not(valid_va) then
-        TR_Failure(PTW_Invalid_Addr(), ext_ptw)
+        TRi_Failure(PTW_Invalid_Addr(), ext_ptw)
       else {
         let mxr    : bool     = mstatus.MXR() == 0b1;
         let do_sum : bool     = mstatus.SUM() == 0b1;
@@ -1116,11 +1154,18 @@ function translate_stage(vAddr,
   }
 }
 
+// Result of Address Translation (AT)
+// PUBLIC
+union TR_Result('paddr : Type, 'exception : Type, 'context : Type) = {
+  TR_Address : ('paddr, ext_ptw),
+  TR_Failure : ('exception, 'context, ext_ptw)
+}
+
 // Top-level addr-translation function
 // PUBLIC: invoked from instr-fetch and load/store/amo
 function translateAddr(vAddr   : xlenbits,
                        ac      : AccessType(ext_access_type))
-                      -> TR_Result(xlenbits, ExceptionType) = {
+                      -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
   // Internally the vmem code works with 64-bit values, whether xlen==32 or xlen==64
   // This 'extend' is a no-op when xlen==64 and extends when xlen==32
   let vAddr_64b : bits(64) = zero_extend(vAddr);
@@ -1134,16 +1179,16 @@ function translateAddr(vAddr   : xlenbits,
 
   if effVirt == V0 then
     match translate_stage(vAddr_64b, ac, effPriv, S, ext_ptw) {
-      TR_Address(pa, ext_ptw) => TR_Address(truncate(pa, sizeof(xlen)), ext_ptw),
-      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw)
+      TRi_Address(pa, ext_ptw) => TR_Address(truncate(pa, sizeof(xlen)), ext_ptw),
+      TRi_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), translationEContext(f, vAddr_64b), ext_ptw)
     }
   else
     match translate_stage(vAddr_64b, ac, effPriv, VS, ext_ptw) {
-      TR_Address(gpa, ext_ptw) => match translate_stage(gpa, ac, effPriv, G, ext_ptw){
-        TR_Address(spa, ext_ptw) => TR_Address(truncate(spa, sizeof(xlen)), ext_ptw),
-        TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw) // FIXME: Promote PF to GPF
+      TRi_Address(gpa, ext_ptw) => match translate_stage(gpa, ac, effPriv, G, ext_ptw){
+        TRi_Address(spa, ext_ptw) => TR_Address(truncate(spa, sizeof(xlen)), ext_ptw),
+        TRi_Failure(f, ext_ptw)  => TR_Failure(convert_GStage_exception(translationException(ac, f), ac), translationEContext(f, vAddr_64b), ext_ptw)
       },
-      TR_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), ext_ptw)
+      TRi_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), translationEContext(f, vAddr_64b), ext_ptw)
     }
 }
 
