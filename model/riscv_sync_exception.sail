@@ -96,11 +96,11 @@ function mem_exception_context(addr : xlenbits) -> ExceptionContext =
   }
 
 // TODO: Should pseudoinst be a parameter here?
-function vmem_exception_context(vaddr : xlenbits, gpaddr : option(xlenbits)) -> ExceptionContext =
+function vmem_exception_context(vaddr : xlenbits, gpaddr : option(xlenbits), pseudoinst : option(xlenbits)) -> ExceptionContext =
   struct {
     excinfo  = Some(vaddr),
     excinfo2 = gpaddr,
-    excinst  = None(),
+    excinst  = pseudoinst,
     ext      = None(),
   }
 

@@ -661,27 +661,52 @@ function translationMode(priv : Privilege, stage : AddressTranslationStage) -> A
 // ****************************************************************
 // Results of Page Table Walk (PTW)
 
-// 'ext_ptw' supports (non-standard) extensions to the default addr-translation and PTW.
+// Note: Idealy we could use 'PTW_Implicit : (PTW_Error, bits(64))' in 'PTW_Error' but recursive types are not supported
+
+// Failure modes for implicit address-translation/page-table-walks
+// PRIVATE
+union PTW_Implicit_Error = {
+  PTW_I_Invalid_Addr  : unit,                         // invalid source address
+  PTW_I_Access        : AccessType(ext_access_type),  // physical memory access error for a PTE
+  PTW_I_Invalid_PTE   : unit,                         // invalid page table entry
+  PTW_I_No_Permission : unit,                         // insufficient page permissions
+  PTW_I_Misaligned    : unit,                         // misaligned superpage
+  PTW_I_PTE_Update    : unit,                         // PTE update needed but not enabled
+  PTW_I_Ext_Error     : ext_ptw_error                 // parameterized for errors from extensions
+}
 
 // Failure modes for address-translation/page-table-walks
 // PRIVATE
 union PTW_Error = {
-  PTW_Invalid_Addr  : unit,                      // invalid source address
-  PTW_Access        : unit,                      // physical memory access error for a PTE
-  PTW_Invalid_PTE   : unit,
-  PTW_No_Permission : unit,
-  PTW_Misaligned    : unit,                      // misaligned superpage
-  PTW_PTE_Update    : unit,                      // PTE update needed but not enabled
-  // Note: Idealy we could use 'PTW_Implicit : (PTW_Error, bits(64))' but recursive types are not allowed
-  PTW_Implicit      : (ExceptionType, bits(64)), // error during implicit access/page-walk of G-stage translation structures
-  PTW_Ext_Error     : ext_ptw_error              // parameterized for errors from extensions
+  PTW_Invalid_Addr  : unit,                           // invalid source address
+  PTW_Access        : AccessType(ext_access_type),    // physical memory access error for a PTE
+  PTW_Invalid_PTE   : unit,                           // invalid page table entry
+  PTW_No_Permission : unit,                           // insufficient page permissions
+  PTW_Misaligned    : unit,                           // misaligned superpage
+  PTW_PTE_Update    : unit,                           // PTE update needed but not enabled
+  PTW_Implicit      : (PTW_Implicit_Error, bits(64)), // error during implicit access/page-walk
+  PTW_Ext_Error     : ext_ptw_error                   // parameterized for errors from extensions
+}
+
+// Convert PTW_Error to PTW_Implicit_Error
+function implicit_error(f : PTW_Error) -> PTW_Implicit_Error = {
+  match f {
+    PTW_Invalid_Addr()  => PTW_I_Invalid_Addr(),
+    PTW_Access(ac)      => PTW_I_Access(ac),
+    PTW_Invalid_PTE()   => PTW_I_Invalid_PTE(),
+    PTW_No_Permission() => PTW_I_No_Permission(),
+    PTW_Misaligned()    => PTW_I_Misaligned(),
+    PTW_PTE_Update()    => PTW_I_PTE_Update(),
+    PTW_Ext_Error()     => PTW_I_Ext_Error(),
+    PTW_Implicit(_, _)  => internal_error(__FILE__, __LINE__, "cannot convert implicit PTW error")
+  }
 }
 
 // PRIVATE: only 'to_str' overload is public
 function ptw_error_to_str(e : PTW_Error) -> string = {
   match e {
     PTW_Invalid_Addr()   => "invalid-source-addr",
-    PTW_Access()         => "mem-access-error",
+    PTW_Access(_)        => "mem-access-error",
     PTW_Invalid_PTE()    => "invalid-pte",
     PTW_No_Permission()  => "no-permission",
     PTW_Misaligned()     => "misaligned-superpage",
@@ -708,16 +733,32 @@ function translationException(a : AccessType(ext_access_type),
                               f : PTW_Error)
                               -> ExceptionType = {
   match (a, f) {
-    (_, PTW_Ext_Error(e))        => E_Extension(ext_translate_exception(e)),
-    (_, PTW_Implicit(e, _))      => e, // No recursive types => just return the enclosed ExceptionType
-    (ReadWrite(_), PTW_Access()) => E_SAMO_Access_Fault(),
-    (ReadWrite(_), _)            => E_SAMO_Page_Fault(),
-    (Read(_), PTW_Access())      => E_Load_Access_Fault(),
-    (Read(_), _)                 => E_Load_Page_Fault(),
-    (Write(_), PTW_Access())     => E_SAMO_Access_Fault(),
-    (Write(_), _)                => E_SAMO_Page_Fault(),
-    (Execute(), PTW_Access())    => E_Fetch_Access_Fault(),
-    (Execute(), _)               => E_Fetch_Page_Fault()
+    (_, PTW_Ext_Error(e))         => E_Extension(ext_translate_exception(e)),
+    (_, PTW_Implicit(fi, _))      => match (a, fi) {
+                                       (_, PTW_I_Ext_Error(e)) => E_Extension(ext_translate_exception(e)),
+                                       (ReadWrite(_), _)       => E_SAMO_GPage_Fault(),
+                                       (Read(_), _)            => E_Load_GPage_Fault(),
+                                       (Write(_), _)           => E_SAMO_GPage_Fault(),
+                                       (Execute(), _)          => E_Fetch_GPage_Fault()},
+    (ReadWrite(_), PTW_Access(_)) => E_SAMO_Access_Fault(),
+    (ReadWrite(_), _)             => E_SAMO_Page_Fault(),
+    (Read(_), PTW_Access(_))      => E_Load_Access_Fault(),
+    (Read(_), _)                  => E_Load_Page_Fault(),
+    (Write(_), PTW_Access(_))     => E_SAMO_Access_Fault(),
+    (Write(_), _)                 => E_SAMO_Page_Fault(),
+    (Execute(), PTW_Access(_))    => E_Fetch_Access_Fault(),
+    (Execute(), _)                => E_Fetch_Page_Fault()
+  }
+}
+
+// PRIVATE
+function pseudoinst(ac : AccessType(ext_access_type), arch : Architecture) -> bits(32) = {
+  match (arch, ac) {
+    (RV32, Read(_))  => 0x00002000,
+    (RV32, Write(_)) => 0x00002020,
+    (RV64, Read(_))  => 0x00003000,
+    (RV64, Write(_)) => 0x00003020,
+    (_, _) => internal_error(__FILE__, __LINE__, "Illegal pseudoinst architecture/access type")
   }
 }
 
@@ -728,8 +769,14 @@ function translationEContext(f     : PTW_Error,
                              -> ExceptionContext = {
   match f {
     PTW_Ext_Error(e)         => ext_exception_context(e),
-    PTW_Implicit(e, gpaddr)  => vmem_exception_context(truncate(vaddr, sizeof(xlen)), Some(truncate(gpaddr, sizeof(xlen)))),
-    _                        => vmem_exception_context(truncate(vaddr, sizeof(xlen)), None()),
+    PTW_Implicit(f, gpaddr)  => {
+      let pinst : option(xlenbits) = match f {
+        PTW_I_Access(ac) => Some(zero_extend(pseudoinst(ac, RV64))), // BUG: When to use RV32?
+        _                => None(),
+      } in
+      vmem_exception_context(truncate(vaddr, sizeof(xlen)), Some(truncate(gpaddr, sizeof(xlen))), pinst)
+    },
+    _ => vmem_exception_context(truncate(vaddr, sizeof(xlen)), None(), None()),
   }
 }
 
@@ -760,33 +807,6 @@ val translate_stage : (bits(64),                    // virtual address
                        AddressTranslationStage,     // S/VS/G
                        ext_ptw                      // ext_ptw
                       ) -> TRi_Result
-
-// Note: Since PTW_Implicit holds an ExceptionType, 'convert_GStage_exception' is used
-//       inside 'pt_walk' which dictates that it is defined before 'pt_walk'
-
-// Convert exceptions resulting from G-stage page walks to architectural exceptions:
-//   - Guest-page-fault exceptions are raised instead of regular page-walk exceptions
-//   - Any exception is always reported for the original access type
-// PRIVATE
-function convert_GStage_exception(e : ExceptionType,
-                                  a : AccessType(ext_access_type))
-                                  -> ExceptionType = {
-  match(e) {
-    E_Fetch_Addr_Align()   => E_Addr_Align_of_AccessType(a),
-    E_Load_Addr_Align()    => E_Addr_Align_of_AccessType(a),
-    E_SAMO_Addr_Align()    => E_Addr_Align_of_AccessType(a),
-    E_Fetch_Access_Fault() => E_Access_Fault_of_AccessType(a),
-    E_Load_Access_Fault()  => E_Access_Fault_of_AccessType(a),
-    E_SAMO_Access_Fault()  => E_Access_Fault_of_AccessType(a),
-    E_Fetch_Page_Fault()   => E_GPage_Fault_of_AccessType(a),
-    E_Load_Page_Fault()    => E_GPage_Fault_of_AccessType(a),
-    E_SAMO_Page_Fault()    => E_GPage_Fault_of_AccessType(a),
-    E_Fetch_GPage_Fault()  => E_GPage_Fault_of_AccessType(a),
-    E_Load_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
-    E_SAMO_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
-    _ => e // Other exceptions are not access type specific
-  }
-}
 
 // ****************************************************************
 // Page Table Walk (PTW)
@@ -824,7 +844,7 @@ function pt_walk(sv_params,
   let pte_phys_addr : xlenbits = match stage {
     VS => match translate_stage(pte_addr, Read(Data), User, G, ext_ptw) {
       TRi_Address(pte_pa, ext_ptw) => pte_pa[(sizeof(xlen) - 1) .. 0],
-      TRi_Failure(f, ext_ptw)  => return PTW_Failure(PTW_Implicit(convert_GStage_exception(translationException(ac, f), ac), pte_addr), ext_ptw),
+      TRi_Failure(f, ext_ptw)  => return PTW_Failure(PTW_Implicit(implicit_error(f), pte_addr), ext_ptw),
     },
     _  => pte_addr[(sizeof(xlen) - 1) .. 0]
   };
@@ -839,7 +859,7 @@ function pt_walk(sv_params,
                                  false);                  // res
 
   match mem_result {
-    MemException(_) => PTW_Failure(PTW_Access(), ext_ptw),
+    MemException(_) => PTW_Failure(PTW_Access(Read(Data)), ext_ptw),
     MemValue(pte)   => {
       let ppns : bits(64) = PPNs_of_PTE(sv_params, pte);
       let ext_pte         = msbs_of_PTE(sv_params, pte);
@@ -1019,7 +1039,7 @@ function translate_TLB_miss(sv_params : SV_Params,
                 TRi_Address(pAddr, ext_ptw)
               },
               MemException(e) =>
-                TRi_Failure(PTW_Access(), ext_ptw)
+                TRi_Failure(PTW_Access(Write(Data)), ext_ptw)
             }
           }
         }
@@ -1154,6 +1174,30 @@ function translate_stage(vAddr,
   }
 }
 
+// Convert exceptions resulting from G-stage page walks to architectural exceptions:
+//   - Guest-page-fault exceptions are raised instead of regular page-walk exceptions
+//   - Any exception is always reported for the original access type
+// PRIVATE
+function GStage_exception(e : ExceptionType,
+                                  a : AccessType(ext_access_type))
+                                  -> ExceptionType = {
+  match(e) {
+    E_Fetch_Addr_Align()   => E_Addr_Align_of_AccessType(a),
+    E_Load_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+    E_SAMO_Addr_Align()    => E_Addr_Align_of_AccessType(a),
+    E_Fetch_Access_Fault() => E_Access_Fault_of_AccessType(a),
+    E_Load_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+    E_SAMO_Access_Fault()  => E_Access_Fault_of_AccessType(a),
+    E_Fetch_Page_Fault()   => E_GPage_Fault_of_AccessType(a),
+    E_Load_Page_Fault()    => E_GPage_Fault_of_AccessType(a),
+    E_SAMO_Page_Fault()    => E_GPage_Fault_of_AccessType(a),
+    E_Fetch_GPage_Fault()  => E_GPage_Fault_of_AccessType(a),
+    E_Load_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+    E_SAMO_GPage_Fault()   => E_GPage_Fault_of_AccessType(a),
+    _ => e // Other exceptions are not access type specific
+  }
+}
+
 // Result of Address Translation (AT)
 // PUBLIC
 union TR_Result('paddr : Type, 'exception : Type, 'context : Type) = {
@@ -1183,7 +1227,7 @@ function translateAddr_pv(vAddr : xlenbits,
     match translate_stage(vAddr_64b, ac, priv, VS, ext_ptw) {
       TRi_Address(gpa, ext_ptw) => match translate_stage(gpa, ac, priv, G, ext_ptw){
         TRi_Address(spa, ext_ptw) => TR_Address(truncate(spa, sizeof(xlen)), ext_ptw),
-        TRi_Failure(f, ext_ptw)  => TR_Failure(convert_GStage_exception(translationException(ac, f), ac), translationEContext(f, vAddr_64b), ext_ptw)
+        TRi_Failure(f, ext_ptw)  => TR_Failure(GStage_exception(translationException(ac, f), ac), translationEContext(f, vAddr_64b), ext_ptw) // BUG: GPA should be written to ExceptionContext
       },
       TRi_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f), translationEContext(f, vAddr_64b), ext_ptw)
     }
