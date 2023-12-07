@@ -173,7 +173,7 @@ function add_to_TLB(asid          : bits(16),
 }
 
 // Top-level TLB flush function
-// PUBLIC: invoked from exec SFENCE_VMA
+// PUBLIC: invoked from exec SFENCE_VMA, HFENCE_VVMA and HFENCE_GVMA
 function flush_TLB(asid_xlen : option(xlenbits),
                    stage     : AddressTranslationStage,
                    addr_xlen : option(xlenbits)) -> unit = {
