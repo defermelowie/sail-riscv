@@ -116,10 +116,10 @@ mapping clause encdec = LOADRES(aq, rl, rs1, size, rd) if amo_width_valid(size)
  */
 
 val process_loadres : forall 'n, 0 < 'n <= xlen_bytes. (regidx, xlenbits, MemoryOpResult(bits(8 * 'n)), bool) -> Retired
-function process_loadres(rd, addr, value, is_unsigned) =
+function process_loadres(rd, vaddr, value, is_unsigned) =
   match extend_value(is_unsigned, value) {
-    MemValue(result) => { load_reservation(addr); X(rd) = result; RETIRE_SUCCESS },
-    MemException(e)  => { handle_mem_exception(addr, e); RETIRE_FAIL }
+    MemValue(result) => { load_reservation(vaddr); X(rd) = result; RETIRE_SUCCESS },
+    MemException(e)  => { handle_mem_exception(vaddr, e); RETIRE_FAIL }
   }
 
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) = {
