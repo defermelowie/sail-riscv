@@ -668,7 +668,7 @@ function translationMode(priv : Privilege, stage : AddressTranslationStage) -> A
 union PTW_Implicit_Error = {
   PTW_I_Invalid_Addr  : unit,                         // invalid source address
   PTW_I_Access        : AccessType(ext_access_type),  // physical memory access error for a PTE
-  PTW_I_Invalid_PTE   : unit,                         // invalid page table entry
+  PTW_I_Invalid_PTE   : unit,                         // invalid page table entry or ptr PTE when level = 0
   PTW_I_No_Permission : unit,                         // insufficient page permissions
   PTW_I_Misaligned    : unit,                         // misaligned superpage
   PTW_I_PTE_Update    : unit,                         // PTE update needed but not enabled
@@ -680,7 +680,7 @@ union PTW_Implicit_Error = {
 union PTW_Error = {
   PTW_Invalid_Addr  : unit,                           // invalid source address
   PTW_Access        : AccessType(ext_access_type),    // physical memory access error for a PTE
-  PTW_Invalid_PTE   : unit,                           // invalid page table entry
+  PTW_Invalid_PTE   : unit,                           // invalid page table entry or ptr PTE when level = 0
   PTW_No_Permission : unit,                           // insufficient page permissions
   PTW_Misaligned    : unit,                           // misaligned superpage
   PTW_PTE_Update    : unit,                           // PTE update needed but not enabled
@@ -735,11 +735,15 @@ function translationException(a : AccessType(ext_access_type),
   match (a, f) {
     (_, PTW_Ext_Error(e))         => E_Extension(ext_translate_exception(e)),
     (_, PTW_Implicit(fi, _))      => match (a, fi) {
-                                       (_, PTW_I_Ext_Error(e)) => E_Extension(ext_translate_exception(e)),
-                                       (ReadWrite(_), _)       => E_SAMO_GPage_Fault(),
-                                       (Read(_), _)            => E_Load_GPage_Fault(),
-                                       (Write(_), _)           => E_SAMO_GPage_Fault(),
-                                       (Execute(), _)          => E_Fetch_GPage_Fault()},
+                                       (_, PTW_I_Ext_Error(e))         => E_Extension(ext_translate_exception(e)),
+                                       (ReadWrite(_), PTW_I_Access(_)) => E_SAMO_Access_Fault(),
+                                       (ReadWrite(_), _)               => E_SAMO_GPage_Fault(),
+                                       (Read(_), PTW_I_Access(_))      => E_Load_Access_Fault(),
+                                       (Read(_), _)                    => E_Load_GPage_Fault(),
+                                       (Write(_), PTW_I_Access(_))     => E_SAMO_Access_Fault(),
+                                       (Write(_), _)                   => E_SAMO_GPage_Fault(),
+                                       (Execute(), PTW_I_Access(_))    => E_Fetch_Access_Fault(),
+                                       (Execute(), _)                  => E_Fetch_GPage_Fault()},
     (ReadWrite(_), PTW_Access(_)) => E_SAMO_Access_Fault(),
     (ReadWrite(_), _)             => E_SAMO_Page_Fault(),
     (Read(_), PTW_Access(_))      => E_Load_Access_Fault(),
@@ -771,8 +775,8 @@ function translationEContext(f     : PTW_Error,
     PTW_Ext_Error(e)         => ext_exception_context(e),
     PTW_Implicit(f, gpaddr)  => {
       let pinst : option(xlenbits) = match f {
-        PTW_I_Access(ac) => Some(zero_extend(pseudoinst(ac, RV64))), // BUG: When to use RV32?
-        _                => None(),
+        PTW_I_Access(ac) => None(),
+        _                => Some(zero_extend(pseudoinst(ac, RV64))), // BUG: When to use RV32?
       } in
       vmem_exception_context(truncate(vaddr, sizeof(xlen)), Some(truncate(gpaddr, sizeof(xlen))), pinst)
     },
@@ -969,7 +973,13 @@ function translate_TLB_hit(sv_params : SV_Params,
               n_ent : TLB_Entry = ent;
               n_ent.pte = pte';
               write_TLB(tlb_index, n_ent, stage);
-              let pte_phys_addr : xlenbits = ent.pteAddr[(sizeof(xlen) - 1) .. 0];
+              let pte_phys_addr : xlenbits = match stage {
+                VS => match translate_stage(ent.pteAddr, Write(Data), User, G, ext_ptw) {
+                  TRi_Address(pte_pa, ext_ptw) => pte_pa[(sizeof(xlen) - 1) .. 0],
+                  TRi_Failure(f, ext_ptw)  => return TRi_Failure(PTW_Implicit(implicit_error(f), ent.pteAddr), ext_ptw),
+                },
+                _  => ent.pteAddr[(sizeof(xlen) - 1) .. 0]
+              };
               let mv = mem_write_value_priv(pte_phys_addr,
                                             8,
                                             pte',
@@ -1023,7 +1033,13 @@ function translate_TLB_miss(sv_params : SV_Params,
             TRi_Failure(PTW_PTE_Update(), ext_ptw)
           else {
             // Writeback the PTE (which has new A/D bits)
-            let pte_phys_addr : xlenbits = pteAddr[(sizeof(xlen) - 1) .. 0];
+            let pte_phys_addr : xlenbits = match stage {
+                VS => match translate_stage(pteAddr, Write(Data), User, G, ext_ptw) {
+                  TRi_Address(pte_pa, ext_ptw) => pte_pa[(sizeof(xlen) - 1) .. 0],
+                  TRi_Failure(f, ext_ptw)  => return TRi_Failure(PTW_Implicit(implicit_error(f), pteAddr), ext_ptw),
+                },
+                _  => pteAddr[(sizeof(xlen) - 1) .. 0]
+              };
             let mv = mem_write_value_priv(pte_phys_addr, // pteAddr,
                                           8,
                                           pte',
