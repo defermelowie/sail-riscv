@@ -77,7 +77,7 @@ struct ExceptionContext = {
   ext      : option(ext_exception)    /* For out-of-tree extensions */
 }
 
-/* Create contexts  for various exception classes */
+/* Create contexts for various exception classes */
 
 function empty_exception_context() -> ExceptionContext =
   struct {
@@ -95,7 +95,6 @@ function mem_exception_context(addr : xlenbits) -> ExceptionContext =
     ext      = None(),
   }
 
-// TODO: Should pseudoinst be a parameter here?
 function vmem_exception_context(vaddr : xlenbits, gpaddr : option(xlenbits), pseudoinst : option(xlenbits)) -> ExceptionContext =
   struct {
     excinfo  = Some(vaddr),
