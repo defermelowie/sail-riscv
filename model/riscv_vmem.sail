@@ -92,7 +92,10 @@
 
 // All VM modes use the same page size (4KB, with 12-bit index)
 
-let PAGESIZE_BITS : nat = 12
+// This two-line idiom constrains the value (2nd line) to be a singleton,
+// which helps in type-checking wherever it is used.
+type PAGESIZE_BITS : Int = 12
+let  PAGESIZE_BITS = sizeof(PAGESIZE_BITS)
 
 // PRIVATE
 struct SV_Params = {
@@ -330,9 +333,15 @@ let sv57x4_params : SV_Params = struct {
 }
 // */
 
+// This 'undefined_SV_Params()' function is not used anywhere, but is
+// currently (2023-12) needed to work around an issue where Sail tries
+// to figure out how it could do
+//     let x : SV_Params = undefined
+// even though the code never does this.  This has been fixed in Sail.
+// The fix will become available in a new Sail release, at which point
+// this function can be deleted (TODO).
 // PRIVATE
 val      undefined_SV_Params : unit -> SV_Params
-
 function undefined_SV_Params() = sv32_params
 
 // ****************************************************************
@@ -341,25 +350,25 @@ function undefined_SV_Params() = sv32_params
 // PRIVATE: Extract full VPN field from VA
 function vpns_of_va(sv_params : SV_Params,
                     va        : bits(64)) -> bits(64) = {
-    let mask : bits(64) = (zero_extend(0b1) << sv_params.va_size_bits) - zero_extend(0b1);
-    (va & mask) >> PAGESIZE_BITS
+  let mask : bits(64) = zero_extend(ones(sv_params.va_size_bits));
+  (va & mask) >> PAGESIZE_BITS
 }
 
 // PRIVATE: Extract VPN[level] from  VA
 function vpn_j_of_va(sv_params : SV_Params,
                      va        : bits(64),
                      level     : nat)       -> bits(64) = {
-    let lsb  : nat       = PAGESIZE_BITS + level * sv_params.vpn_size_bits;
+    let lsb  : nat      = PAGESIZE_BITS + level * sv_params.vpn_size_bits;
     let mask : bits(64) = if (level == sv_params.levels - 1)
-                          then (zero_extend(0b1) << sv_params.root_vpn_size_bits) - 1
-                          else (zero_extend(0b1) << sv_params.vpn_size_bits) - 1;
+                          then zero_extend(ones(sv_params.root_vpn_size_bits))
+                          else zero_extend(ones(sv_params.vpn_size_bits));
     ((va >> lsb) & mask)
 }
 
 // PRIVATE: Extract offset within page from VA
 function offset_of_va(va : bits(64)) -> bits(64) = {
-    let mask : bits(64) = (zero_extend(0b1) << PAGESIZE_BITS) - 1;
-    va & mask
+  let mask : bits(64) = zero_extend(ones(PAGESIZE_BITS));
+  va & mask
 }
 
 // Valid xlen-wide values containing virtual addrs must have upper
@@ -370,13 +379,9 @@ function offset_of_va(va : bits(64)) -> bits(64) = {
 // PRIVATE
 function is_valid_vAddr(struct { va_size_bits, va_sign_extends, _ } : SV_Params,
                         vAddr                      : bits(64))  -> bool = {
-  let index      = va_size_bits - 1;
-  let upper_bits = vAddr[63 .. va_size_bits];
-  let va_msb     = vAddr[index];
-  if (va_msb == bitzero | not(va_sign_extends)) then
-    upper_bits == zeros()
-  else
-    upper_bits == ones()
+  if va_sign_extends
+  then vAddr == sign_extend(vAddr[va_size_bits - 1 .. 0])
+  else vAddr == zero_extend(vAddr[va_size_bits - 1 .. 0])
 }
 
 // ****************************************************************
@@ -398,13 +403,13 @@ type extPte = bits(64)
 
 // PRIVATE: extract msbs of PTE above the PPN
 function msbs_of_PTE(sv_params : SV_Params, pte : bits(64)) -> bits(64) = {
-  let mask : bits(64) = (zero_extend(0b1) << sv_params.pte_msbs_size_bits) - zero_extend(0b1);
+  let mask : bits(64) = zero_extend(ones(sv_params.pte_msbs_size_bits));
   (pte >> sv_params.pte_msbs_lsb_index) & mask
 }
 
 // PRIVATE: extract PPNs of PTE
 function PPNs_of_PTE(sv_params : SV_Params, pte : bits(64)) -> bits(64) = {
-  let mask : bits(64) = (zero_extend(0b1) << sv_params.pte_PPNs_size_bits) - zero_extend(0b1);
+  let mask : bits(64) = zero_extend(ones(sv_params.pte_PPNs_size_bits));
   (pte >> sv_params.pte_PPNs_lsb_index) & mask
 }
 
@@ -775,8 +780,8 @@ function translationEContext(f     : PTW_Error,
     PTW_Ext_Error(e)         => ext_exception_context(e),
     PTW_Implicit(f, gpaddr)  => {
       let pinst : option(xlenbits) = match f {
-        PTW_I_Access(ac) => None(),
-        _                => Some(zero_extend(pseudoinst(ac, RV64))), // BUG: When to use RV32?
+        PTW_I_Access(ac) => Some(zero_extend(pseudoinst(ac, RV64))), // BUG: When to use RV32?
+        _                => None(),
       } in
       vmem_exception_context(truncate(vaddr, sizeof(xlen)), Some(truncate(gpaddr, sizeof(xlen))), pinst)
     },
@@ -899,9 +904,8 @@ function pt_walk(sv_params,
             PTE_Check_Success(ext_ptw) =>
               if level > 0 then {
                 // Superpage; construct mask for lower-level PPNs from the PTE
-                mask_PPN_j : bits(64) = (zero_extend(0b1) << sv_params.pte_PPN_j_size_bits)
-                                        - zero_extend(0b1);
-                mask       : bits(64) = zero_extend(0b0);
+                let mask_PPN_j : bits(64) = zero_extend(ones(sv_params.pte_PPN_j_size_bits));
+                mask           : bits(64) = zeros();
                 foreach (j from 0 to (level - 1))
                   mask = ((mask << sv_params.pte_PPN_j_size_bits) | mask_PPN_j);
                 // Lower-level PPNs must be zero (for aligned superpage)
@@ -1076,8 +1080,7 @@ function translate(sv_params : SV_Params,
                    level     : nat,
                    ext_ptw   : ext_ptw)
                    -> TRi_Result = {
-  let one_64b  : bits(64) = zero_extend(0b1);
-  let va_mask = (one_64b << sv_params.va_size_bits) - 1;
+  let va_mask : bits(64) = zero_extend(ones(sv_params.va_size_bits));
   let vAddr   = (vAddr_arg & va_mask);
 
   // On first reading, assume lookup_TLB returns None(), since TLBs
