@@ -776,7 +776,8 @@ function pseudoinst(ac : AccessType(ext_access_type), arch : Architecture) -> bi
 // Build architectural exception context for translation/PTW failures
 // PRIVATE
 function translationEContext(f     : PTW_Error,
-                             vaddr : bits(64))
+                             vaddr : bits(64),
+                             gva   : bool)
                              -> ExceptionContext = {
   match f {
     PTW_Ext_Error(e)            => ext_exception_context(e),
@@ -786,9 +787,9 @@ function translationEContext(f     : PTW_Error,
         PTW_I_Ext_Error(_) => None(),
         _                  => Some(zero_extend(pseudoinst(ac, RV64))), // FIXME: When to use RV32?
       } in
-      vmem_exception_context(truncate(vaddr, sizeof(xlen)), Some(truncate(gpaddr, sizeof(xlen))), pinst)
+      vmem_exception_context(truncate(vaddr, sizeof(xlen)), true, Some(truncate(gpaddr >> 2, sizeof(xlen))), pinst)
     },
-    _ => vmem_exception_context(truncate(vaddr, sizeof(xlen)), None(), None()),
+    _ => vmem_exception_context(truncate(vaddr, sizeof(xlen)), gva, None(), None()),
   }
 }
 
@@ -1250,7 +1251,7 @@ function translateAddr_pv(vAddr : xlenbits,
     match translate_stage(vAddr_64b, ac, priv, S, ext_ptw) {
       TRi_Address(pa, ext_ptw) => TR_Address(truncate(pa, sizeof(xlen)), ext_ptw),
       TRi_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f),
-                                             translationEContext(f, vAddr_64b),
+                                             translationEContext(f, vAddr_64b, false),
                                              ext_ptw)
     }
   else
@@ -1258,11 +1259,11 @@ function translateAddr_pv(vAddr : xlenbits,
       TRi_Address(gpa, ext_ptw) => match translate_stage(gpa, ac, priv, G, ext_ptw){
         TRi_Address(spa, ext_ptw) => TR_Address(truncate(spa, sizeof(xlen)), ext_ptw),
         TRi_Failure(f, ext_ptw)  => TR_Failure(GStage_exception(translationException(ac, f), ac),
-                                               translationEContext(f, vAddr_64b),
+                                               {translationEContext(f, vAddr_64b, true) with excinfo2 = Some(truncate(gpa >> 2, sizeof(xlen)))},
                                                ext_ptw)
       },
       TRi_Failure(f, ext_ptw)  => TR_Failure(translationException(ac, f),
-                                             translationEContext(f, vAddr_64b),
+                                             translationEContext(f, vAddr_64b, true),
                                              ext_ptw)
     }
 }
