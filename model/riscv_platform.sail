@@ -505,7 +505,8 @@ function handle_instr_fault(e: ExceptionType) -> unit = {
   set_next_pc(exception_handler(cur_privilege, cur_virtualization, CTL_TRAP(e, c), PC))
 }
 
-function handle_illegal() -> unit = handle_instr_fault(E_Illegal_Instr()) // FIXME: Would be clearer if called 'handle_illegal_instr()'
+// Note: Would its purpose be clearer if called 'handle_illegal_instr()'?
+function handle_illegal() -> unit = handle_instr_fault(E_Illegal_Instr())
 
 function handle_virtual_instr() -> unit = handle_instr_fault(E_Virtual_Instr())
 
