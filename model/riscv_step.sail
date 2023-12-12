@@ -111,7 +111,7 @@ function step(step_no : int) -> bool = {
           F_RVC(h) => {
             instbits = zero_extend(h);
             let ast = ext_decode_compressed(h);
-            instbits_transformed = enc_transformed(ast, zeros()); // FIXME: Set correct address offset for transformed instructions
+            instbits_transformed = enc_transformed(ast, zeros()); // BUG: Address offset may be nonzero for misaligned memory accesses
             if   get_config_print_instr()
             then {
               print_instr("[" ^ string_of_int(step_no) ^ "] [" ^ to_str(cur_privilege, cur_virtualization) ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(h) ^ ") " ^ to_str(ast));
@@ -128,7 +128,7 @@ function step(step_no : int) -> bool = {
           F_Base(w) => {
             instbits = zero_extend(w);
             let ast = ext_decode(w);
-            instbits_transformed = enc_transformed(ast, zeros()); // FIXME: Set correct address offset for transformed instructions
+            instbits_transformed = enc_transformed(ast, zeros()); // BUG: Address offset may be nonzero for misaligned memory accesses
             if   get_config_print_instr()
             then {
               print_instr("[" ^ string_of_int(step_no) ^ "] [" ^ to_str(cur_privilege, cur_virtualization) ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ to_str(ast));
