@@ -80,7 +80,7 @@ function fetch() -> FetchResult = {
     Ext_FetchAddr_OK(use_pc) => {
       /* then check PC alignment */
       if   (use_pc[0] != bitzero | (use_pc[1] != bitzero & not(haveRVC())))
-      then F_Error(E_Fetch_Addr_Align(), mem_exception_context(PC))
+      then F_Error(E_Fetch_Addr_Align(), mem_exception_context(PC, if cur_virtualization == V1 then true else false)) // Note: V==1 is illegal for M-mode
       else match translateAddr(use_pc, Execute()) {
         TR_Failure(e, c, _) => F_Error(e, c),
         TR_Address(_, _)    => {

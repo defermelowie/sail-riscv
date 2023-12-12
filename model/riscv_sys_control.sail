@@ -692,23 +692,18 @@ function handle_exception(e: ExceptionType, c: ExceptionContext) -> unit = {
 }
 
 function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
-  let addr_is_gva : bool = if cur_virtualization == V1 then match e {
-    E_Breakpoint()         => true,
-    E_Fetch_Addr_Align()   => true,
-    E_Load_Addr_Align()    => true,
-    E_SAMO_Addr_Align()    => true,
-    E_Fetch_Access_Fault() => true,
-    E_Load_Access_Fault()  => true,
-    E_SAMO_Access_Fault()  => true,
-    E_Fetch_Page_Fault()   => internal_error(__FILE__,__LINE__, "E_Fetch_Page_Fault is not supported by handle_mem_exception"), // FIXME: this is ugly but for these exceptions, info2 should be set
-    E_Load_Page_Fault()    => internal_error(__FILE__,__LINE__, "E_Load_Page_Fault is not supported by handle_mem_exception"), // FIXME: this is ugly but for these exceptions, info2 should be set
-    E_SAMO_Page_Fault()    => internal_error(__FILE__,__LINE__, "E_SAMO_Page_Fault is not supported by handle_mem_exception"), // FIXME: this is ugly but for these exceptions, info2 should be set
-    E_Fetch_GPage_Fault()  => internal_error(__FILE__,__LINE__, "E_Fetch_GPage_Fault is not supported by handle_mem_exception"), // FIXME: this is ugly but for these exceptions, info2 should be set
-    E_Load_GPage_Fault()   => internal_error(__FILE__,__LINE__, "E_Load_GPage_Fault is not supported by handle_mem_exception"), // FIXME: this is ugly but for these exceptions, info2 should be set
-    E_SAMO_GPage_Fault()   => internal_error(__FILE__,__LINE__, "E_SAMO_GPage_Fault is not supported by handle_mem_exception"), // FIXME: this is ugly but for these exceptions, info2 should be set
-    _                      => false
-  } else false;
-  handle_exception(e, mem_exception_context(addr, addr_is_gva))
+  /* handle_mem_exception only supports the following exception causes */
+  assert(match e {
+          E_Breakpoint()         => true,
+          E_Fetch_Addr_Align()   => true,
+          E_Load_Addr_Align()    => true,
+          E_SAMO_Addr_Align()    => true,
+          E_Fetch_Access_Fault() => true,
+          E_Load_Access_Fault()  => true,
+          E_SAMO_Access_Fault()  => true,
+          _                      => false
+          }, "exception not supported by current handler");
+  handle_exception(e, mem_exception_context(addr, cur_virtualization == V1))
 }
 
 function handle_interrupt(i : InterruptType, del_priv : Privilege, del_virt: Virtualization) -> unit =
