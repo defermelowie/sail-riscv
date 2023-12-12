@@ -74,11 +74,6 @@
 
 register cur_privilege : Privilege
 
-/* current instruction bits, used for illegal instruction exceptions */
-/* FIXME: Is cur_inst a duplicate of instbits from riscv_regs.sail?   */
-
-register cur_inst : xlenbits
-
 /* State projections
  *
  * Some machine state is processed via projections from machine-mode views to
