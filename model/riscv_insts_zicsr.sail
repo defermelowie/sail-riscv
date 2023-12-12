@@ -108,6 +108,8 @@ function readCSR csr : csreg -> xlenbits = {
     (0x342,  _) => mcause.bits(),
     (0x343,  _) => mtval,
     (0x344,  _) => mip.bits(),
+    (0x34A,  _) => mtinst,
+    (0x34B,  _) => mtval2,
 
     (0x3A0,  _) => pmpReadCfgReg(0),           // pmpcfg0
     (0x3A1, 32) => pmpReadCfgReg(1),           // pmpcfg1
@@ -149,24 +151,51 @@ function readCSR csr : csreg -> xlenbits = {
     /* trigger/debug */
     (0x7a0,  _) => ~(tselect),  /* this indicates we don't have any trigger support */
 
-    /* hypervisor extendended supervisor mode */
-    /* TODO: move h-ext CSR reads here in order to not use `ext*` types and hooks (see CODE_STYLE.md) */
-    (0x680, _) => hgatp,
+    /* hypervisor extended supervisor mode */
+    /* TODO: Add read handle for ALL H-ext CSRs */
+    (0x600,  _) => hstatus.bits(),
+    (0x602,  _) => hedeleg.bits(),
+    // (0x603,  _) => hideleg,
+    // (0x604,  _) => hie,
+    // (0x606,  _) => hcounteren,
+    // (0x607,  _) => hgeie,
+    (0x643,  _) => htval,
+    // (0x644,  _) => hip,
+    // (0x645,  _) => hvip,
+    (0x64A,  _) => htinst,
+    // (0xE12,  _) => hgeip,
+    // (0x60A,  _) => henvcfg[sizeof(xlen) - 1 .. 0],
+    // (0x61A, 32) => henvcfg[63 .. 32],
+    (0x680,  _) => hgatp,
+    // (0x6A8,  _) => hcontext,
+    // (0x605,  _) => htimedelta[sizeof(xlen) - 1 .. 0],
+    // (0x615,  _) => htimedelta[63 .. 32],
 
     /* supervisor mode */
-    (0x100,  _) => if cur_virtualization == V1 then get_vsstatus() else lower_mstatus(mstatus).bits(),
+    (0x100,  _) => if cur_virtualization == V1 then vsstatus.bits() else lower_mstatus(mstatus).bits(),
     (0x102,  _) => sedeleg.bits(),
     (0x103,  _) => sideleg.bits(),
     (0x104,  _) => lower_mie(mie, mideleg).bits(), /* TODO: read vsie when V=1 */
     (0x105,  _) => get_trap_vector(Supervisor, cur_virtualization),
     (0x106,  _) => zero_extend(scounteren.bits()),
     (0x10A,  _) => senvcfg.bits()[sizeof(xlen) - 1 .. 0],
-    (0x140,  _) => if cur_virtualization == V1 then get_vsscratch() else sscratch,
+    (0x140,  _) => if cur_virtualization == V1 then vsscratch else sscratch,
     (0x141,  _) => get_xret_target(Supervisor, cur_virtualization) & pc_alignment_mask(),
-    (0x142,  _) => if cur_virtualization == V1 then get_vscause() else scause.bits(),
-    (0x143,  _) => if cur_virtualization == V1 then get_vstval() else stval,
+    (0x142,  _) => if cur_virtualization == V1 then vscause.bits() else scause.bits(),
+    (0x143,  _) => if cur_virtualization == V1 then vstval else stval,
     (0x144,  _) => lower_mip(mip, mideleg).bits(), /* TODO: read vsip when V=1 */
     (0x180,  _) => satp, /* TODO: read vsatp when V=1 */
+
+    /* virtual supervisor mode */
+    (0x200,  _) => vsstatus.bits(),
+    // (0x204,  _) => vsie,
+    (0x205,  _) => get_trap_vector(Supervisor, V1),
+    (0x240,  _) => vsscratch,
+    (0x241,  _) => get_xret_target(Supervisor, V1),
+    (0x242,  _) => vscause.bits(),
+    (0x243,  _) => vstval,
+    // (0x244,  _) => vsip,
+    (0x280,  _) => vsatp,
 
     /* user mode counters */
     (0xC00,  _) => mcycle[(sizeof(xlen) - 1) .. 0],
@@ -246,13 +275,18 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x7a0,  _) => { tselect = value; Some(tselect) },
 
     /* hypervisor extendended supervisor mode */
-    /* TODO: move h-ext CSR writes here in order to not use `ext*` types and hooks (see CODE_STYLE.md) */
-    (0x680, _) => { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(hgatp) },
+    (0x34A,  _) => { mtinst = value; Some(mtinst) },
+    (0x34B,  _) => { mtval2 = value; Some(mtval2) },
+    (0x600,  _) => { hstatus = legalize_hstatus(hstatus, value); Some(hstatus.bits()) },
+    (0x602,  _) => { hedeleg = legalize_hedeleg(hedeleg, value); Some(hedeleg.bits()) },
+    (0x643,  _) => { htval = value; Some(htval) },
+    (0x64A,  _) => { htinst = value; Some(htinst) },
+    (0x680,  _) => { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(hgatp) },
 
     /* supervisor mode */
     (0x100,  _) => match cur_virtualization {
                     V0 => { mstatus = legalize_sstatus(mstatus, value); Some(mstatus.bits()) },
-                    V1 => { vsstatus = legalize_vsstatus(vsstatus, value); Some(get_vsstatus()) }
+                    V1 => { vsstatus = legalize_vsstatus(vsstatus, value); Some(vsstatus.bits()) }
                   },
     (0x102,  _) => { sedeleg = legalize_sedeleg(sedeleg, value); Some(sedeleg.bits()) },
     (0x103,  _) => { sideleg->bits() = value; Some(sideleg.bits()) }, /* TODO: does this need legalization? */
@@ -267,7 +301,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x141,  _) => { Some(set_xret_target(Supervisor, cur_virtualization, value)) },
     (0x142,  _) => match cur_virtualization {
                     V0 => { scause->bits() = value; Some(scause.bits()) },
-                    V1 => { vscause->bits() = value; Some(get_vscause()) }
+                    V1 => { vscause->bits() = value; Some(vscause.bits()) }
                 },
     (0x143,  _) => match cur_virtualization {
                     V0 => { stval = value; Some(stval) },
@@ -278,6 +312,16 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
                     V0 => { satp = legalize_satp(cur_Architecture(), satp, value); Some(satp) },
                     V1 => { vsatp = legalize_satp(cur_Architecture(), vsatp, value); Some(vsatp) },
     },
+
+    /* virtual supervisor mode */
+    (0x200,  _) => { vsstatus = legalize_vsstatus(vsstatus, value); Some(vsstatus.bits()) },
+    (0x205,  _) => { Some(set_trap_vector(Supervisor, V1, value)) },
+    (0x240,  _) => { vsscratch = value; Some(vsscratch) },
+    (0x241,  _) => { Some(set_xret_target(Supervisor, V1, value)) },
+    (0x242,  _) => { vscause->bits() = value; Some(vscause.bits()) },
+    (0x243,  _) => { vstval = value; Some(vstval) },
+    (0x280,  _) => { vsatp = value; Some(vsatp) },
+
     /* user mode: seed (entropy source). writes are ignored */
     (0x015,  _) => write_seed_csr(),
 

@@ -106,10 +106,6 @@ function set_hstatus_VSXL(h : Hstatus, a : arch_xlen) -> Hstatus = {
   }
 }
 
-function get_hstatus() -> xlenbits = {
-  hstatus.bits()
-}
-
 function legalize_hstatus(o : Hstatus, v : xlenbits) -> Hstatus = {
   let v = Mk_Hstatus(v);
   let h = Mk_Hstatus(zero_extend(0b0));
@@ -134,10 +130,6 @@ function legalize_hstatus(o : Hstatus, v : xlenbits) -> Hstatus = {
 /* Hypervisor Trap Delegation Registers                             */
 
 register hedeleg : Medeleg
-
-function get_hedeleg() -> xlenbits = {
-  hedeleg.bits()
-}
 
 function legalize_hedeleg(o: Medeleg, v: xlenbits) -> Medeleg = {
   let h = Mk_Medeleg(v);
@@ -238,10 +230,6 @@ function set_vsstatus_UXL(v : Vsstatus, a : arch_xlen) -> Vsstatus = {
   }
 }
 
-function get_vsstatus() -> xlenbits = {
-  vsstatus.bits()
-}
-
 function legalize_vsstatus(vs: Vsstatus, v: xlenbits) -> Vsstatus = {
   let m = Mk_Mstatus(vs.bits());  /* Convert to Mstatus   */
   let s = legalize_sstatus(m, v); /* Legalize for Sstatus */
@@ -253,44 +241,25 @@ function legalize_vsstatus(vs: Vsstatus, v: xlenbits) -> Vsstatus = {
 
 register vstvec : Mtvec
 
-/* get_vstvec is defined in riscv_sys_exceptions.sail */
-/* set_vstvec is defined in riscv_sys_exceptions.sail */
-
 /* **************************************************************** */
 /* Virtual Supervisor Scratch Register                              */
 
 register vsscratch : xlenbits
-
-function get_vsscratch() -> xlenbits = {
-  vsscratch
-}
 
 /* **************************************************************** */
 /* Virtual Supervisor Exception Program Counter                     */
 
 register vsepc : xlenbits
 
-function get_vsepc() -> xlenbits = {
-  vsepc
-}
-
 /* **************************************************************** */
 /* Virtual Supervisor Cause Register                                */
 
 register vscause : Mcause
 
-function get_vscause() -> xlenbits = {
-  vscause.bits()
-}
-
 /* **************************************************************** */
 /* Virtual Supervisor Trap Value Register                           */
 
 register vstval : xlenbits
-
-function get_vstval() -> xlenbits = {
-  vstval
-}
 
 /* **************************************************************** */
 /* TODO: Virtual Supervisor interrupt pending                       */
@@ -299,7 +268,3 @@ function get_vstval() -> xlenbits = {
 /* Virtual Supervisor address translation & Protection              */
 
 register vsatp : xlenbits
-
-function get_vsatp() -> xlenbits = {
-  vsatp
-}
