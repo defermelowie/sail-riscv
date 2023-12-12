@@ -97,51 +97,7 @@ function clause ext_is_CSR_defined(0x243, _) = haveHExt() /* vstval */
 function clause ext_is_CSR_defined(0x244, _) = haveHExt() /* vsip */
 function clause ext_is_CSR_defined(0x280, _) = haveHExt() /* vsatp */
 
-/* H-ext CSR read handles */// TODO: move to riscv_insts_zicsr.sail in order to not use ext* hooks
-function clause ext_read_CSR(0x34A) = Some(mtinst) /* mtinst */
-function clause ext_read_CSR(0x34B) = Some(mtval2) /* mtval2 */
-function clause ext_read_CSR(0x600) = Some(get_hstatus()) /* hstatus */
-function clause ext_read_CSR(0x602) = Some(get_hedeleg()) /* hedeleg */
-// function clause ext_read_CSR(0x603) = Some() /* hideleg */
-// function clause ext_read_CSR(0x604) = Some() /* hie */
-// function clause ext_read_CSR(0x606) = Some() /* hcounteren */
-// function clause ext_read_CSR(0x607) = Some() /* hgeie */
-function clause ext_read_CSR(0x643) = Some(htval) /* htval */
-// function clause ext_read_CSR(0x644) = Some() /* hip */
-// function clause ext_read_CSR(0x645) = Some() /* hvip */
-function clause ext_read_CSR(0x64A) = Some(htinst) /* htinst */
-// function clause ext_read_CSR(0xE12) = Some() /* hgeip */
-// function clause ext_read_CSR(0x60A) = Some() /* henvcfg */
-// function clause ext_read_CSR(0x61A) = Some() /* henvcfgh */
-/* read hgatp */ // See riscv_insts_zicsr.sail
-// function clause ext_read_CSR(0x605) = Some() /* htimedelta */
-// function clause ext_read_CSR(0x615) = Some() /* htimedeltah */
-/* TODO: VS* CSR read access checks */
-function clause ext_read_CSR(0x200) = Some(get_vsstatus()) /* vsstatus */
-// function clause ext_read_CSR(0x204) = Some() /* vsie */
-function clause ext_read_CSR(0x205) = Some(get_trap_vector(Supervisor, V1)) /* vstvec */
-function clause ext_read_CSR(0x240) = Some(get_vsscratch()) /* vsscratch */
-function clause ext_read_CSR(0x241) = Some(get_xret_target(Supervisor, V1)) /* vsepc */
-function clause ext_read_CSR(0x242) = Some(get_vscause()) /* vscause */
-function clause ext_read_CSR(0x243) = Some(get_vstval()) /* vstval */
-// function clause ext_read_CSR(0x244) = Some() /* vsip */
-function clause ext_read_CSR(0x280) = Some(get_vsatp()) /* vsatp */
-
-/* H-ext CSR write handles */
-function clause ext_write_CSR(0x34A, value) = { mtinst = value; Some(mtinst) }
-function clause ext_write_CSR(0x34B, value) = { mtval2 = value; Some(mtval2) }
-function clause ext_write_CSR(0x600, value) = { hstatus = legalize_hstatus(hstatus, value); Some(get_hstatus()) }
-function clause ext_write_CSR(0x602, value) = { hedeleg = legalize_hedeleg(hedeleg, value); Some(get_hedeleg()) }
-function clause ext_write_CSR(0x643, value) = { htval = value; Some(htval) }
-function clause ext_write_CSR(0x64A, value) = { htinst = value; Some(htinst) }
-/* write hgatp (0x680)*/ // See riscv_insts_zicsr.sail
-function clause ext_write_CSR(0x200, value) = { vsstatus = legalize_vsstatus(vsstatus, value); Some(get_vsstatus()) }
-function clause ext_write_CSR(0x205, value) = { Some(set_trap_vector(Supervisor, V1, value)) }
-function clause ext_write_CSR(0x240, value) = { vsscratch = value; Some(get_vsscratch()) }
-function clause ext_write_CSR(0x241, value) = { Some(set_xret_target(Supervisor, V1, value)) }
-function clause ext_write_CSR(0x242, value) = { vscause->bits() = value; Some(get_vscause()) }
-function clause ext_write_CSR(0x243, value) = { vstval = value; Some(get_vstval()) }
-function clause ext_write_CSR(0x280, value) = { vsatp = value; Some(get_vsatp()) }
+// TODO: VS* CSR read access checks
 
 /* Initialize hypervisor extension */
 function init_hext() -> unit = {
