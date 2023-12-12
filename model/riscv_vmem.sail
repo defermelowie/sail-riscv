@@ -785,7 +785,7 @@ function translationEContext(f     : PTW_Error,
       let pinst : option(xlenbits) = match f {
         PTW_I_Access()     => None(),
         PTW_I_Ext_Error(_) => None(),
-        _                  => Some(zero_extend(pseudoinst(ac, RV64))), // FIXME: When to use RV32?
+        _                  => Some(zero_extend(pseudoinst(ac, if sizeof(xlen) == 32 then RV32 else RV64))), // FIXME: This does not support dynamic XLEN changes
       } in
       vmem_exception_context(truncate(vaddr, sizeof(xlen)), true, Some(truncate(gpaddr >> 2, sizeof(xlen))), pinst)
     },
