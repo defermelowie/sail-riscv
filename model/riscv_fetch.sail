@@ -83,7 +83,7 @@ function fetch() -> FetchResult =
     Ext_FetchAddr_Error(e)   => F_Ext_Error(e),
     Ext_FetchAddr_OK(use_pc) => {
       if   (use_pc[0] != bitzero | (use_pc[1] != bitzero & not(haveRVC())))
-      then F_Error(E_Fetch_Addr_Align(), mem_exception_context(PC, if cur_virtualization == V1 then true else false)) // FIXME: is_GVA also depends on privilege (false for M-mode)
+      then F_Error(E_Fetch_Addr_Align(), mem_exception_context(PC, cur_virtualization == V1 then true else false)) // Note: V==1 is illegal for M-mode
       else match translateAddr(use_pc, Execute()) {
         TR_Failure(e, c, _)  => F_Error(e, c),
         TR_Address(ppclo, _) => {
@@ -92,7 +92,7 @@ function fetch() -> FetchResult =
            * exceptions.
            */
           match mem_read(Execute(), ppclo, 2, false, false, false) {
-            MemException(e) => F_Error(e, mem_exception_context(PC, if cur_virtualization == V1 then true else false)), // FIXME: is_GVA also depends on privilege (false for M-mode)
+            MemException(e) => F_Error(e, mem_exception_context(PC, cur_virtualization == V1 then true else false)), // Note: V==1 is illegal for M-mode
             MemValue(ilo)   => {
               if   isRVC(ilo)
               then F_RVC(ilo)
@@ -106,7 +106,7 @@ function fetch() -> FetchResult =
                       TR_Failure(e, c, _)  => F_Error(e, c),
                       TR_Address(ppchi, _) => {
                         match mem_read(Execute(), ppchi, 2, false, false, false) {
-                          MemException(e) => F_Error(e, mem_exception_context(PC_hi, if cur_virtualization == V1 then true else false)), // FIXME: is_GVA also depends on privilege (false for M-mode)
+                          MemException(e) => F_Error(e, mem_exception_context(PC_hi, cur_virtualization == V1 then true else false)), // Note: V==1 is illegal for M-mode
                           MemValue(ihi)   => F_Base(append(ihi, ilo))
                         }
                       }
