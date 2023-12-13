@@ -224,8 +224,8 @@ mapping clause encdec = RISCV_FMINM_H(rs2, rs1, rd)     if haveZfh() & haveZfa()
 
 mapping clause assembly = RISCV_FMINM_H(rs2, rs1, rd)
   <-> "fminm.h" ^ spc() ^ freg_name(rd)
-                ^ spc() ^ freg_name(rs1)
-                ^ spc() ^ freg_name(rs2)
+                ^ sep() ^ freg_name(rs1)
+                ^ sep() ^ freg_name(rs2)
 
 function clause execute (RISCV_FMINM_H(rs2, rs1, rd)) = {
   let rs1_val_H = F_H(rs1);
@@ -254,8 +254,8 @@ mapping clause encdec = RISCV_FMAXM_H(rs2, rs1, rd)     if haveZfh() & haveZfa()
 
 mapping clause assembly = RISCV_FMAXM_H(rs2, rs1, rd)
   <-> "fmaxm.h" ^ spc() ^ freg_name(rd)
-                ^ spc() ^ freg_name(rs1)
-                ^ spc() ^ freg_name(rs2)
+                ^ sep() ^ freg_name(rs1)
+                ^ sep() ^ freg_name(rs2)
 
 function clause execute (RISCV_FMAXM_H(rs2, rs1, rd)) = {
   let rs1_val_H = F_H(rs1);
@@ -284,8 +284,8 @@ mapping clause encdec = RISCV_FMINM_S(rs2, rs1, rd)     if haveZfa()
 
 mapping clause assembly = RISCV_FMINM_S(rs2, rs1, rd)
   <-> "fminm.s" ^ spc() ^ freg_name(rd)
-                ^ spc() ^ freg_name(rs1)
-                ^ spc() ^ freg_name(rs2)
+                ^ sep() ^ freg_name(rs1)
+                ^ sep() ^ freg_name(rs2)
 
 function clause execute (RISCV_FMINM_S(rs2, rs1, rd)) = {
   let rs1_val_S = F_S(rs1);
@@ -314,8 +314,8 @@ mapping clause encdec = RISCV_FMAXM_S(rs2, rs1, rd)     if haveZfa()
 
 mapping clause assembly = RISCV_FMAXM_S(rs2, rs1, rd)
   <-> "fmaxm.s" ^ spc() ^ freg_name(rd)
-                ^ spc() ^ freg_name(rs1)
-                ^ spc() ^ freg_name(rs2)
+                ^ sep() ^ freg_name(rs1)
+                ^ sep() ^ freg_name(rs2)
 
 function clause execute (RISCV_FMAXM_S(rs2, rs1, rd)) = {
   let rs1_val_S = F_S(rs1);
@@ -344,8 +344,8 @@ mapping clause encdec = RISCV_FMINM_D(rs2, rs1, rd)     if haveDExt() & haveZfa(
 
 mapping clause assembly = RISCV_FMINM_D(rs2, rs1, rd)
   <-> "fminm.d" ^ spc() ^ freg_name(rd)
-                ^ spc() ^ freg_name(rs1)
-                ^ spc() ^ freg_name(rs2)
+                ^ sep() ^ freg_name(rs1)
+                ^ sep() ^ freg_name(rs2)
 
 function clause execute (RISCV_FMINM_D(rs2, rs1, rd)) = {
   let rs1_val_D = F(rs1);
@@ -373,9 +373,9 @@ mapping clause encdec = RISCV_FMAXM_D(rs2, rs1, rd)     if haveDExt() & haveZfa(
   <-> 0b001_0101 @ rs2 @ rs1 @ 0b011 @ rd @ 0b101_0011  if haveDExt() & haveZfa()
 
 mapping clause assembly = RISCV_FMAXM_D(rs2, rs1, rd)
-  <-> "fmaxm.s" ^ spc() ^ freg_name(rd)
-                ^ spc() ^ freg_name(rs1)
-                ^ spc() ^ freg_name(rs2)
+  <-> "fmaxm.d" ^ spc() ^ freg_name(rd)
+                ^ sep() ^ freg_name(rs1)
+                ^ sep() ^ freg_name(rs2)
 
 function clause execute (RISCV_FMAXM_D(rs2, rs1, rd)) = {
   let rs1_val_D = F(rs1);
@@ -404,8 +404,8 @@ mapping clause encdec = RISCV_FROUND_H(rs1, rm, rd)                           if
 
 mapping clause assembly = RISCV_FROUND_H(rs1, rm, rd)
   <-> "fround.h" ^ spc() ^ freg_name(rd)
-                 ^ spc() ^ freg_name(rs1)
-                 ^ spc() ^ frm_mnemonic(rm)
+                 ^ sep() ^ freg_name(rs1)
+                 ^ sep() ^ frm_mnemonic(rm)
 
 function clause execute (RISCV_FROUND_H(rs1, rm, rd)) = {
   let rs1_val_H = F_H(rs1);
@@ -416,7 +416,7 @@ function clause execute (RISCV_FROUND_H(rs1, rm, rd)) = {
       let rm_3b =  encdec_rounding_mode(rm');
       let (fflags, rd_val_H) = riscv_f16roundToInt(rm_3b, rs1_val_H, false);
 
-      write_fflags(fflags);
+      accrue_fflags(fflags);
       F_H(rd) = rd_val_H;
       RETIRE_SUCCESS
     }
@@ -432,8 +432,8 @@ mapping clause encdec = RISCV_FROUNDNX_H(rs1, rm, rd)                         if
 
 mapping clause assembly = RISCV_FROUNDNX_H(rs1, rm, rd)
   <-> "froundnx.h" ^ spc() ^ freg_name(rd)
-                   ^ spc() ^ freg_name(rs1)
-                   ^ spc() ^ frm_mnemonic(rm)
+                   ^ sep() ^ freg_name(rs1)
+                   ^ sep() ^ frm_mnemonic(rm)
 
 function clause execute (RISCV_FROUNDNX_H(rs1, rm, rd)) = {
   let rs1_val_H = F_H(rs1);
@@ -444,7 +444,7 @@ function clause execute (RISCV_FROUNDNX_H(rs1, rm, rd)) = {
       let rm_3b =  encdec_rounding_mode(rm');
       let (fflags, rd_val_H) = riscv_f16roundToInt(rm_3b, rs1_val_H, true);
 
-      write_fflags(fflags);
+      accrue_fflags(fflags);
       F_H(rd) = rd_val_H;
       RETIRE_SUCCESS
     }
@@ -460,8 +460,8 @@ mapping clause encdec = RISCV_FROUND_S(rs1, rm, rd)                            i
 
 mapping clause assembly = RISCV_FROUND_S(rs1, rm, rd)
   <-> "fround.s" ^ spc() ^ freg_name(rd)
-                 ^ spc() ^ freg_name(rs1)
-                 ^ spc() ^ frm_mnemonic(rm)
+                 ^ sep() ^ freg_name(rs1)
+                 ^ sep() ^ frm_mnemonic(rm)
 
 function clause execute (RISCV_FROUND_S(rs1, rm, rd)) = {
   let rs1_val_S = F_S(rs1);
@@ -472,7 +472,7 @@ function clause execute (RISCV_FROUND_S(rs1, rm, rd)) = {
       let rm_3b =  encdec_rounding_mode(rm');
       let (fflags, rd_val_S) = riscv_f32roundToInt(rm_3b, rs1_val_S, false);
 
-      write_fflags(fflags);
+      accrue_fflags(fflags);
       F_S(rd) = rd_val_S;
       RETIRE_SUCCESS
     }
@@ -488,8 +488,8 @@ mapping clause encdec = RISCV_FROUNDNX_S(rs1, rm, rd)                         if
 
 mapping clause assembly = RISCV_FROUNDNX_S(rs1, rm, rd)
   <-> "froundnx.s" ^ spc() ^ freg_name(rd)
-                   ^ spc() ^ freg_name(rs1)
-                   ^ spc() ^ frm_mnemonic(rm)
+                   ^ sep() ^ freg_name(rs1)
+                   ^ sep() ^ frm_mnemonic(rm)
 
 function clause execute (RISCV_FROUNDNX_S(rs1, rm, rd)) = {
   let rs1_val_S = F_S(rs1);
@@ -500,7 +500,7 @@ function clause execute (RISCV_FROUNDNX_S(rs1, rm, rd)) = {
       let rm_3b =  encdec_rounding_mode(rm');
       let (fflags, rd_val_S) = riscv_f32roundToInt(rm_3b, rs1_val_S, true);
 
-      write_fflags(fflags);
+      accrue_fflags(fflags);
       F_S(rd) = rd_val_S;
       RETIRE_SUCCESS
     }
@@ -516,8 +516,8 @@ mapping clause encdec = RISCV_FROUND_D(rs1, rm, rd)                            i
 
 mapping clause assembly = RISCV_FROUND_D(rs1, rm, rd)
   <-> "fround.d" ^ spc() ^ freg_name(rd)
-                 ^ spc() ^ freg_name(rs1)
-                 ^ spc() ^ frm_mnemonic(rm)
+                 ^ sep() ^ freg_name(rs1)
+                 ^ sep() ^ frm_mnemonic(rm)
 
 function clause execute (RISCV_FROUND_D(rs1, rm, rd)) = {
   let rs1_val_D = F(rs1);
@@ -528,7 +528,7 @@ function clause execute (RISCV_FROUND_D(rs1, rm, rd)) = {
       let rm_3b =  encdec_rounding_mode(rm');
       let (fflags, rd_val_D) = riscv_f64roundToInt(rm_3b, rs1_val_D, false);
 
-      write_fflags(fflags);
+      accrue_fflags(fflags);
       F(rd) = rd_val_D;
       RETIRE_SUCCESS
     }
@@ -544,8 +544,8 @@ mapping clause encdec = RISCV_FROUNDNX_D(rs1, rm, rd)                         if
 
 mapping clause assembly = RISCV_FROUNDNX_D(rs1, rm, rd)
   <-> "froundnx.d" ^ spc() ^ freg_name(rd)
-                   ^ spc() ^ freg_name(rs1)
-                   ^ spc() ^ frm_mnemonic(rm)
+                   ^ sep() ^ freg_name(rs1)
+                   ^ sep() ^ frm_mnemonic(rm)
 
 function clause execute (RISCV_FROUNDNX_D(rs1, rm, rd)) = {
   let rs1_val_D = F_D(rs1);
@@ -556,7 +556,7 @@ function clause execute (RISCV_FROUNDNX_D(rs1, rm, rd)) = {
       let rm_3b =  encdec_rounding_mode(rm');
       let (fflags, rd_val_D) = riscv_f64roundToInt(rm_3b, rs1_val_D, true);
 
-      write_fflags(fflags);
+      accrue_fflags(fflags);
       F_D(rd) = rd_val_D;
       RETIRE_SUCCESS
     }
@@ -572,7 +572,7 @@ mapping clause encdec   = RISCV_FMVH_X_D(rs1, rd)           if haveDExt() & have
 
 mapping clause assembly = RISCV_FMVH_X_D(rs1, rd)
   <-> "fmvh.x.d" ^ spc() ^ reg_name(rd)
-                 ^ spc() ^ freg_name(rs1)
+                 ^ sep() ^ freg_name(rs1)
 
 function clause execute (RISCV_FMVH_X_D(rs1, rd)) = {
   let rs1_val_D           = F_D(rs1)[63..32];
@@ -590,8 +590,8 @@ mapping clause encdec = RISCV_FMVP_D_X(rs2, rs1, rd)        if haveDExt() & have
 
 mapping clause assembly = RISCV_FMVP_D_X(rs2, rs1, rd)
   <-> "fmvp.d.x" ^ spc() ^ freg_name(rd)
-                 ^ spc() ^ reg_name(rs1)
-                 ^ spc() ^ reg_name(rs2)
+                 ^ sep() ^ reg_name(rs1)
+                 ^ sep() ^ reg_name(rs2)
 
 function clause execute (RISCV_FMVP_D_X(rs2, rs1, rd)) = {
   let rs1_val_X     = X(rs1)[31..0];
@@ -617,8 +617,8 @@ mapping clause encdec = RISCV_FLEQ_H(rs2, rs1, rd)               if haveZfh() & 
 
 mapping clause assembly = RISCV_FLEQ_H(rs2, rs1, rd)
   <-> "fleq.h" ^ spc() ^ freg_name(rd)
-               ^ spc() ^ freg_name(rs1)
-               ^ spc() ^ freg_name(rs2)
+               ^ sep() ^ freg_name(rs1)
+               ^ sep() ^ freg_name(rs2)
 
 function clause execute(RISCV_FLEQ_H(rs2, rs1, rd)) = {
   let rs1_val_H = F_H(rs1);
@@ -627,7 +627,7 @@ function clause execute(RISCV_FLEQ_H(rs2, rs1, rd)) = {
   let (fflags, rd_val) : (bits_fflags, bool) =
       riscv_f16Le_quiet   (rs1_val_H, rs2_val_H);
 
-  write_fflags(fflags);
+  accrue_fflags(fflags);
   X(rd) = zero_extend(bool_to_bits(rd_val));
   RETIRE_SUCCESS
 }
@@ -641,8 +641,8 @@ mapping clause encdec = RISCV_FLTQ_H(rs2, rs1, rd)               if haveZfh() & 
 
 mapping clause assembly = RISCV_FLTQ_H(rs2, rs1, rd)
   <-> "fltq.h" ^ spc() ^ freg_name(rd)
-               ^ spc() ^ freg_name(rs1)
-               ^ spc() ^ freg_name(rs2)
+               ^ sep() ^ freg_name(rs1)
+               ^ sep() ^ freg_name(rs2)
 
 function clause execute(RISCV_FLTQ_H(rs2, rs1, rd)) = {
   let rs1_val_H = F_H(rs1);
@@ -651,7 +651,7 @@ function clause execute(RISCV_FLTQ_H(rs2, rs1, rd)) = {
   let (fflags, rd_val) : (bits_fflags, bool) =
       riscv_f16Lt_quiet   (rs1_val_H, rs2_val_H);
 
-  write_fflags(fflags);
+  accrue_fflags(fflags);
   X(rd) = zero_extend(bool_to_bits(rd_val));
   RETIRE_SUCCESS
 }
@@ -665,8 +665,8 @@ mapping clause encdec = RISCV_FLEQ_S(rs2, rs1, rd)               if haveZfa()
 
 mapping clause assembly = RISCV_FLEQ_S(rs2, rs1, rd)
   <-> "fleq.s" ^ spc() ^ freg_name(rd)
-               ^ spc() ^ freg_name(rs1)
-               ^ spc() ^ freg_name(rs2)
+               ^ sep() ^ freg_name(rs1)
+               ^ sep() ^ freg_name(rs2)
 
 function clause execute(RISCV_FLEQ_S(rs2, rs1, rd)) = {
   let rs1_val_S = F_S(rs1);
@@ -675,7 +675,7 @@ function clause execute(RISCV_FLEQ_S(rs2, rs1, rd)) = {
   let (fflags, rd_val) : (bits_fflags, bool) =
       riscv_f32Le_quiet   (rs1_val_S, rs2_val_S);
 
-  write_fflags(fflags);
+  accrue_fflags(fflags);
   X(rd) = zero_extend(bool_to_bits(rd_val));
   RETIRE_SUCCESS
 }
@@ -689,8 +689,8 @@ mapping clause encdec = RISCV_FLTQ_S(rs2, rs1, rd)               if haveZfa()
 
 mapping clause assembly = RISCV_FLTQ_S(rs2, rs1, rd)
   <-> "fltq.s" ^ spc() ^ freg_name(rd)
-               ^ spc() ^ freg_name(rs1)
-               ^ spc() ^ freg_name(rs2)
+               ^ sep() ^ freg_name(rs1)
+               ^ sep() ^ freg_name(rs2)
 
 function clause execute(RISCV_FLTQ_S(rs2, rs1, rd)) = {
   let rs1_val_S = F_S(rs1);
@@ -699,7 +699,7 @@ function clause execute(RISCV_FLTQ_S(rs2, rs1, rd)) = {
   let (fflags, rd_val) : (bits_fflags, bool) =
       riscv_f32Lt_quiet   (rs1_val_S, rs2_val_S);
 
-  write_fflags(fflags);
+  accrue_fflags(fflags);
   X(rd) = zero_extend(bool_to_bits(rd_val));
   RETIRE_SUCCESS
 }
@@ -714,8 +714,8 @@ mapping clause encdec = RISCV_FLEQ_D(rs2, rs1, rd)               if haveDExt() &
 
 mapping clause assembly = RISCV_FLEQ_D(rs2, rs1, rd)
   <-> "fleq.d" ^ spc() ^ freg_name(rd)
-               ^ spc() ^ freg_name(rs1)
-               ^ spc() ^ freg_name(rs2)
+               ^ sep() ^ freg_name(rs1)
+               ^ sep() ^ freg_name(rs2)
 
 function clause execute(RISCV_FLEQ_D(rs2, rs1, rd)) = {
   let rs1_val_D = F_D(rs1);
@@ -724,7 +724,7 @@ function clause execute(RISCV_FLEQ_D(rs2, rs1, rd)) = {
   let (fflags, rd_val) : (bits_fflags, bool) =
       riscv_f64Le_quiet   (rs1_val_D, rs2_val_D);
 
-  write_fflags(fflags);
+  accrue_fflags(fflags);
   X(rd) = zero_extend(bool_to_bits(rd_val));
   RETIRE_SUCCESS
 }
@@ -738,8 +738,8 @@ mapping clause encdec = RISCV_FLTQ_D(rs2, rs1, rd)               if haveDExt() &
 
 mapping clause assembly = RISCV_FLTQ_D(rs2, rs1, rd)
   <-> "fltq.d" ^ spc() ^ freg_name(rd)
-               ^ spc() ^ freg_name(rs1)
-               ^ spc() ^ freg_name(rs2)
+               ^ sep() ^ freg_name(rs1)
+               ^ sep() ^ freg_name(rs2)
 
 function clause execute(RISCV_FLTQ_D(rs2, rs1, rd)) = {
   let rs1_val_D = F_D(rs1);
@@ -748,7 +748,7 @@ function clause execute(RISCV_FLTQ_D(rs2, rs1, rd)) = {
   let (fflags, rd_val) : (bits_fflags, bool) =
       riscv_f64Lt_quiet   (rs1_val_D, rs2_val_D);
 
-  write_fflags(fflags);
+  accrue_fflags(fflags);
   X(rd) = zero_extend(bool_to_bits(rd_val));
   RETIRE_SUCCESS
 }
@@ -823,12 +823,12 @@ mapping clause encdec = RISCV_FCVTMOD_W_D(rs1, rd)          if haveDExt() & have
 
 mapping clause assembly = RISCV_FCVTMOD_W_D(rs1, rd)
   <-> "fcvtmod.w.d" ^ spc() ^ reg_name(rd)
-		    ^ spc() ^ freg_name(rs1)
+		    ^ sep() ^ freg_name(rs1)
 
 function clause execute(RISCV_FCVTMOD_W_D(rs1, rd)) = {
   let rs1_val_D = F_D(rs1);
   let (fflags, rd_val) = fcvtmod_helper(rs1_val_D);
-  write_fflags(fflags);
+  accrue_fflags(fflags);
   X(rd) = sign_extend(rd_val);
   RETIRE_SUCCESS
 }

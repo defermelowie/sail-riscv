@@ -53,9 +53,15 @@ let options = Arg.align ([("-dump-dts",
                           ("-mtval-has-illegal-inst-bits",
                            Arg.Set P.config_mtval_has_illegal_inst_bits,
                            " mtval stores instruction bits on an illegal instruction exception");
+                          ("-enable-writable-fiom",
+                           Arg.Set P.config_enable_writable_fiom,
+                           " enable FIOM (Fence of I/O implies Memory) bit in menvcfg");
                           ("-disable-rvc",
                            Arg.Clear P.config_enable_rvc,
                            " disable the RVC extension on boot");
+                          ("-disable-vext",
+                           Arg.Clear P.config_enable_vext,
+                           " disable the RVV extension on boot");
                           ("-disable-writable-misa-c",
                            Arg.Clear P.config_enable_writable_misa,
                            " leave misa hardwired to its initial value");

@@ -98,7 +98,9 @@ function readCSR csr : csreg -> xlenbits = {
     (0x304,  _) => mie.bits(),
     (0x305,  _) => get_mtvec(),
     (0x306,  _) => zero_extend(mcounteren.bits()),
+    (0x30A,  _) => menvcfg.bits()[sizeof(xlen) - 1 .. 0],
     (0x310, 32) => mstatush.bits(),
+    (0x31A, 32) => menvcfg.bits()[63 .. 32],
     (0x320,  _) => zero_extend(mcountinhibit.bits()),
 
     (0x340,  _) => mscratch,
@@ -135,6 +137,15 @@ function readCSR csr : csreg -> xlenbits = {
     (0xB80, 32) => mcycle[63 .. 32],
     (0xB82, 32) => minstret[63 .. 32],
 
+    /* vector */
+    (0x008, _) => zero_extend(vstart),
+    (0x009, _) => zero_extend(vxsat),
+    (0x00A, _) => zero_extend(vxrm),
+    (0x00F, _) => zero_extend(vcsr.bits()),
+    (0xC20, _) => vl,
+    (0xC21, _) => vtype.bits(),
+    (0xC22, _) => vlenb,
+
     /* trigger/debug */
     (0x7a0,  _) => ~(tselect),  /* this indicates we don't have any trigger support */
 
@@ -149,6 +160,7 @@ function readCSR csr : csreg -> xlenbits = {
     (0x104,  _) => lower_mie(mie, mideleg).bits(), /* TODO: read vsie when V=1 */
     (0x105,  _) => get_trap_vector(Supervisor, cur_virtualization),
     (0x106,  _) => zero_extend(scounteren.bits()),
+    (0x10A,  _) => senvcfg.bits()[sizeof(xlen) - 1 .. 0],
     (0x140,  _) => if cur_virtualization == V1 then get_vsscratch() else sscratch,
     (0x141,  _) => get_xret_target(Supervisor, cur_virtualization) & pc_alignment_mask(),
     (0x142,  _) => if cur_virtualization == V1 then get_vscause() else scause.bits(),
@@ -190,7 +202,10 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x304,  _) => { mie = legalize_mie(mie, value); Some(mie.bits()) },
     (0x305,  _) => { Some(set_mtvec(value)) },
     (0x306,  _) => { mcounteren = legalize_mcounteren(mcounteren, value); Some(zero_extend(mcounteren.bits())) },
+    (0x30A, 32) => { menvcfg = legalize_envcfg(menvcfg, menvcfg.bits()[63 .. 32] @ value); Some(menvcfg.bits()[31 .. 0]) },
+    (0x30A, 64) => { menvcfg = legalize_envcfg(menvcfg, value); Some(menvcfg.bits()) },
     (0x310, 32) => { Some(mstatush.bits()) }, // ignore writes for now
+    (0x31A, 32) => { menvcfg = legalize_envcfg(menvcfg, value @ menvcfg.bits()[31 .. 0]); Some(menvcfg.bits()[63 .. 32]) },
     (0x320,  _) => { mcountinhibit = legalize_mcountinhibit(mcountinhibit, value); Some(zero_extend(mcountinhibit.bits())) },
     (0x340,  _) => { mscratch = value; Some(mscratch) },
     (0x341,  _) => { Some(set_xret_target(Machine, V0, value)) },
@@ -244,6 +259,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x104,  _) => { mie = legalize_sie(mie, mideleg, value); Some(mie.bits()) }, /* TODO: set vsie when V=1 */
     (0x105,  _) => { Some(set_trap_vector(Supervisor, cur_virtualization, value)) },
     (0x106,  _) => { scounteren = legalize_scounteren(scounteren, value); Some(zero_extend(scounteren.bits())) },
+    (0x10A,  _) => { senvcfg = legalize_envcfg(senvcfg, zero_extend(value)); Some(senvcfg.bits()[sizeof(xlen) - 1 .. 0]) },
     (0x140,  _) => match cur_virtualization {
                     V0 => { sscratch = value; Some(sscratch) },
                     V1 => { vsscratch = value; Some(vsscratch) },
@@ -262,6 +278,15 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
 
     /* user mode: seed (entropy source). writes are ignored */
     (0x015,  _) => write_seed_csr(),
+
+    /* vector */
+    (0x008, _) => { let vstart_length = get_vlen_pow(); vstart = zero_extend(16, value[(vstart_length - 1) .. 0]); Some(zero_extend(vstart)) },
+    (0x009, _) => { vxsat = value[0 .. 0]; Some(zero_extend(vxsat)) },
+    (0x00A, _) => { vxrm = value[1 .. 0]; Some(zero_extend(vxrm)) },
+    (0x00F, _) => { vcsr->bits() = value[2 ..0]; Some(zero_extend(vcsr.bits())) },
+    (0xC20, _) => { vl = value; Some(vl) },
+    (0xC21, _) => { vtype->bits() = value; Some(vtype.bits()) },
+    (0xC22, _) => { vlenb = value; Some(vlenb) },
 
     _           => ext_write_CSR(csr, value)
   };

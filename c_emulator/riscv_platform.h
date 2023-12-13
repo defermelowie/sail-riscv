@@ -7,6 +7,8 @@ bool sys_enable_fdext(unit);
 bool sys_enable_zfinx(unit);
 bool sys_enable_hext(unit);
 bool sys_enable_writable_misa(unit);
+bool sys_enable_writable_fiom(unit);
+bool sys_enable_vext(unit);
 
 bool plat_enable_dirty_update(unit);
 bool plat_enable_misaligned_access(unit);
