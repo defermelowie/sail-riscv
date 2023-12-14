@@ -157,7 +157,7 @@ function readCSR csr : csreg -> xlenbits = {
     (0x602,  _) => hedeleg.bits(),
     // (0x603,  _) => hideleg,
     // (0x604,  _) => hie,
-    // (0x606,  _) => hcounteren,
+    (0x606,  _) => zero_extend(hcounteren.bits()),
     // (0x607,  _) => hgeie,
     (0x643,  _) => htval,
     // (0x644,  _) => hip,
@@ -199,10 +199,10 @@ function readCSR csr : csreg -> xlenbits = {
 
     /* user mode counters */
     (0xC00,  _) => mcycle[(sizeof(xlen) - 1) .. 0],
-    (0xC01,  _) => mtime[(sizeof(xlen) - 1) .. 0],
+    (0xC01,  _) => mtime[(sizeof(xlen) - 1) .. 0], // TODO: return sum of time & htimedelta when V=1
     (0xC02,  _) => minstret[(sizeof(xlen) - 1) .. 0],
     (0xC80, 32) => mcycle[63 .. 32],
-    (0xC81, 32) => mtime[63 .. 32],
+    (0xC81, 32) => mtime[63 .. 32],                // TODO: return sum of time & htimedelta when V=1
     (0xC82, 32) => minstret[63 .. 32],
 
     /* user mode: Zkr */
@@ -279,6 +279,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x34B,  _) => { mtval2 = value; Some(mtval2) },
     (0x600,  _) => { hstatus = legalize_hstatus(hstatus, value); Some(hstatus.bits()) },
     (0x602,  _) => { hedeleg = legalize_hedeleg(hedeleg, value); Some(hedeleg.bits()) },
+    (0x606,  _) => { hcounteren = legalize_hcounteren(hcounteren, value); Some(zero_extend(hcounteren.bits())) },
     (0x643,  _) => { htval = value; Some(htval) },
     (0x64A,  _) => { htinst = value; Some(htinst) },
     (0x680,  _) => { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(hgatp) },

@@ -189,17 +189,27 @@ function check_TVM_SATP(csr : csreg, p : Privilege, v: Virtualization) -> bool =
     (_, _)           => true
   }
 
-function check_Counteren(csr : csreg, p : Privilege) -> bool =
-  match(csr, p) {
-    (0xC00, Supervisor) => mcounteren.CY() == 0b1,
-    (0xC01, Supervisor) => mcounteren.TM() == 0b1,
-    (0xC02, Supervisor) => mcounteren.IR() == 0b1,
+function check_Counteren(csr : csreg, p : Privilege, v : Virtualization) -> bool =
+  match(csr, p, v) {
+    (0xC00, Supervisor, V0) => mcounteren.CY() == 0b1,
+    (0xC01, Supervisor, V0) => mcounteren.TM() == 0b1,
+    (0xC02, Supervisor, V0) => mcounteren.IR() == 0b1,
 
-    (0xC00, User) => mcounteren.CY() == 0b1 & (not(haveSupMode()) | scounteren.CY() == 0b1),
-    (0xC01, User) => mcounteren.TM() == 0b1 & (not(haveSupMode()) | scounteren.TM() == 0b1),
-    (0xC02, User) => mcounteren.IR() == 0b1 & (not(haveSupMode()) | scounteren.IR() == 0b1),
+    (0xC00, Supervisor, V1) => mcounteren.CY() == 0b1 & hcounteren.CY() == 0b1,
+    (0xC01, Supervisor, V1) => mcounteren.TM() == 0b1 & hcounteren.TM() == 0b1,
+    (0xC02, Supervisor, V1) => mcounteren.IR() == 0b1 & hcounteren.IR() == 0b1,
 
-    (_, _) => /* no HPM counters for now */
+    (0xC00, User, VO) => mcounteren.CY() == 0b1 & (not(haveSupMode()) | scounteren.CY() == 0b1),
+    (0xC01, User, VO) => mcounteren.TM() == 0b1 & (not(haveSupMode()) | scounteren.TM() == 0b1),
+    (0xC02, User, VO) => mcounteren.IR() == 0b1 & (not(haveSupMode()) | scounteren.IR() == 0b1),
+
+    // Note: S-mode is always present when H-ext is implemented
+    (0xC00, User, V1) => mcounteren.CY() == 0b1 & hcounteren.CY() == 0b1 & scounteren.CY() == 0b1,
+    (0xC01, User, V1) => mcounteren.TM() == 0b1 & hcounteren.TM() == 0b1 & scounteren.TM() == 0b1,
+    (0xC02, User, V1) => mcounteren.IR() == 0b1 & hcounteren.IR() == 0b1 & scounteren.IR() == 0b1,
+
+    /* no HPM counters for now */
+    (_, _, _) => // Note: would be more elegant if matching on ranges was supported
               if   0xC03 <=_u csr & csr <=_u 0xC1F
               then false
               else true
@@ -228,7 +238,7 @@ function check_CSR(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool
     is_CSR_defined(csr, p)
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, v, isWrite)
   & check_TVM_SATP(csr, p, v)
-  & check_Counteren(csr, p)
+  & check_Counteren(csr, p, v)
   & check_seed_CSR(csr, p, isWrite)
 
 /* Reservation handling for LR/SC.
