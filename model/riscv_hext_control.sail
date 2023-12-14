@@ -164,45 +164,41 @@ function init_hext() -> unit = {
   vsatp = zero_extend(0b0);
 }
 
-/* Determine if an illegal CSR access should raise a "virtual instruction exception" instead of an "illegal instruction exception"
+/*
+ * Determine if an illegal CSR access should raise a "virtual instruction exception" instead of
+ * an "illegal instruction exception"
  *
  * According to the spec. (V20211203 - Section 9.6), this should happen in the following cases:
- *   [ ] in VS-mode, attempts to access a non-high-half counter CSR when the corresponding bit in hcounteren is 0 and the same bit in mcounteren is 1;
- *   [ ] in VS-mode, if XLEN=32, attempts to access a high-half counter CSR when the corresponding bit in hcounteren is 0 and the same bit in mcounteren is 1;
- *   [ ] in VU-mode, attempts to access a non-high-half counter CSR when the corresponding bit in either hcounteren or scounteren is 0 and the same bit in mcounteren is 1;
- *   [ ] in VU-mode, if XLEN=32, attempts to access a high-half counter CSR when the corresponding bit in either hcounteren or scounteren is 0 and the same bit in mcounteren is 1;
- *   [x] in VS-mode or VU-mode, attempts to access an implemented non-high-half hypervisor CSR or VS CSR when the same access (read/write)
- *       would be allowed in HS-mode, assuming mstatus.TVM=0;
- *   [ ] in VS-mode or VU-mode, if XLEN=32, attempts to access an implemented high-half hypervisor CSR or high-half VS CSR when the same access (read/write)
- *       to the CSR’s low-half partner would be allowed in HS-mode, assuming mstatus.TVM=0;
- *   [x] in VU-mode, attempts to access an implemented non-high-half supervisor CSR when the same access (read/write) would be allowed in HS-mode, assuming mstatus.TVM=0;
- *   [ ] in VU-mode, if XLEN=32, attempts to access an implemented high-half supervisor CSR when the same access to the CSR’s low-half
+ *   [X] in VS-mode, attempts to access a non-high-half counter CSR when the corresponding bit
+ *       in hcounteren is 0 and the same bit in mcounteren is 1;
+ *   [ ] in VS-mode, if XLEN=32, attempts to access a high-half counter CSR when the
+ *       corresponding bit in hcounteren is 0 and the same bit in mcounteren is 1;
+ *   [X] in VU-mode, attempts to access a non-high-half counter CSR when the corresponding bit
+ *       in either hcounteren or scounteren is 0 and the same bit in mcounteren is 1;
+ *   [ ] in VU-mode, if XLEN=32, attempts to access a high-half counter CSR when the
+ *       corresponding bit in either hcounteren or scounteren is 0 and the same bit in
+ *       mcounteren is 1;
+ *   [x] in VS-mode or VU-mode, attempts to access an implemented non-high-half hypervisor CSR
+ *       or VS CSR when the same access (read/write) would be allowed in HS-mode, assuming
+ *       mstatus.TVM=0;
+ *   [ ] in VS-mode or VU-mode, if XLEN=32, attempts to access an implemented high-half
+ *       hypervisor CSR or high-half VS CSR when the same access (read/write) to the CSR’s
+ *       low-half partner would be allowed in HS-mode, assuming mstatus.TVM=0;
+ *   [x] in VU-mode, attempts to access an implemented non-high-half supervisor CSR when the
+ *       same access (read/write) would be allowed in HS-mode, assuming mstatus.TVM=0;
+ *   [ ] in VU-mode, if XLEN=32, attempts to access an implemented high-half supervisor CSR
+ *       when the same access to the CSR’s low-half
  *       partner would be allowed in HS-mode, assuming mstatus.TVM=0;
- *   [ ] in VS-mode, attempts to access satp, when hstatus.VTVM=1
+ *   [X] in VS-mode, attempts to access satp, when hstatus.VTVM=1
  */
-/* TODO: implement rest of the above cases for raising virtual instruction exception */
+/* TODO: The above cases should probably be checked in unittests instead of listed here */
 function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool = {
-  let csr_rw = csr[11..10];
-  let csr_p  = csr[9..8];
-
-  match (p, v) {
-    (Machine,     _) => false,
-    (_,          V0) => false,
-    (Supervisor, V1) => {
-      if not(isWrite == true & csr_rw == 0b11) & (csr_p <=_u 0b10) /* HS-access allowed? */
-      then match (csr_rw, csr_p) {
-        (_, 0b01) => true,  /* Supervisor CSR accesses from VS-mode that are disabled by CSRs */
-        (_, 0b10) => true,  /* Hypervisor or VS CSR accesses from VS-mode */
-        (_, _)    => false,
-      } else false
-    },
-    (User,       V1) => {
-      if not(isWrite == true & csr_rw == 0b11) & (csr_p <=_u 0b10) /* HS-access allowed? */
-      then match (csr_rw, csr_p) {
-        (_, 0b01) => true,  /* Supervisor CSR accesses from VU-mode */
-        (_, 0b10) => true,  /* Hypervisor or VS CSR accesses from VU-mode */
-        (_, _)    => false,
-      } else false
-    },
-  }
+  if v == V0
+  then false
+  // Would HS-access be allowed?
+  // Note: Can't reuse check_CSR since it also checks TVM
+  else is_CSR_defined(csr, Supervisor) &
+       check_CSR_access(csrAccess(csr), csrPriv(csr), Supervisor, V0, isWrite) &
+       check_Counteren(csr, Supervisor, V0) &
+       check_seed_CSR(csr, Supervisor, isWrite)
 }
