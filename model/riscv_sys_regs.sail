@@ -607,7 +607,7 @@ bitfield Counteren : bits(32) = {
 register mcounteren : Counteren
 register scounteren : Counteren
 
-function legalize_mcounteren(c : Counteren, v : xlenbits) -> Counteren = {
+function legalize_counteren(c : Counteren, v : xlenbits) -> Counteren = {
   /* no HPM counters yet */
   let c = update_IR(c, [v[2]]);
   let c = update_TM(c, [v[1]]);
@@ -615,12 +615,12 @@ function legalize_mcounteren(c : Counteren, v : xlenbits) -> Counteren = {
   c
 }
 
+function legalize_mcounteren(c : Counteren, v : xlenbits) -> Counteren = {
+  legalize_counteren(c, v)
+}
+
 function legalize_scounteren(c : Counteren, v : xlenbits) -> Counteren = {
-  /* no HPM counters yet */
-  let c = update_IR(c, [v[2]]);
-  let c = update_TM(c, [v[1]]);
-  let c = update_CY(c, [v[0]]);
-  c
+  legalize_counteren(c, v)
 }
 
 bitfield Counterin : bits(32) = {
