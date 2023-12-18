@@ -148,7 +148,7 @@ function legalize_hedeleg(o: Medeleg, v: xlenbits) -> Medeleg = {
 /* TODO: hie */
 
 /* **************************************************************** */
-/* Hypervisor Counter Enable                                        */
+/* Hypervisor hpm-related registers                                 */
 
 register hcounteren : Counteren
 
@@ -156,8 +156,7 @@ function legalize_hcounteren(c : Counteren, v : xlenbits) -> Counteren = {
   legalize_counteren(c, v)
 }
 
-/* **************************************************************** */
-/* TODO: Hypervisor Time Delta Registers                            */
+register htimedelta : bits(64)
 
 /* **************************************************************** */
 /* TODO: Hypervisor Guest External Interrupt-Enable                 */

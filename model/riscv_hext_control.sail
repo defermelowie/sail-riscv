@@ -131,24 +131,23 @@ function init_hext() -> unit = {
 
   /* Init HS-mode CSRs */
 
-  hstatus->bits() = zero_extend(0b0);
+  hstatus->bits() = zeros();
   hstatus = set_hstatus_VSXL(hstatus, misa.MXL()); /* Dynamic XLEN changes are not (yet) supported */
 
-  hedeleg->bits() = zero_extend(0b0);
+  hedeleg->bits() = zeros();
   /* TODO: init hideleg */
   /* TODO: init hie */
   /* TODO: init hcounteren */
   /* TODO: init hgeie */
-  htval = zero_extend(0b0);
-  htinst = zero_extend(0b0);
+  htval = zeros();
+  htinst = zeros();
   /* TODO: init hip */
   /* TODO: init hvip */
   /* TODO: init hgeip */
   /* TODO: init henvcfg */
   /* TODO: init henvcfgh */
   // hgatp = zero_extend(0b0);
-  /* TODO: init htimedelta */
-  /* TODO: init htimedeltah */
+  htimedelta = zeros();
 
   /* Init VS-mode CSRs */
 
@@ -191,7 +190,7 @@ function init_hext() -> unit = {
  *       partner would be allowed in HS-mode, assuming mstatus.TVM=0;
  *   [X] in VS-mode, attempts to access satp, when hstatus.VTVM=1
  */
-/* TODO: The above cases should probably be checked in unittests instead of listed here */
+/* FIXME: The above cases should probably be checked in unittests instead of listed here */
 function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool = {
   if v == V0
   then false
