@@ -152,6 +152,7 @@ function findPendingInterrupt(ip : xlenbits) -> option(InterruptType) = {
   else if ip.UEI() == 0b1 then Some(I_U_External)
   else if ip.USI() == 0b1 then Some(I_U_Software)
   else if ip.UTI() == 0b1 then Some(I_U_Timer)
+  // TODO: add hypervisor interrupts
   else                         None()
 }
 
@@ -186,7 +187,7 @@ function processPending(xip : Minterrupts, xie : Minterrupts, xideleg : xlenbits
  * We don't use the lowered views of {xie,xip} here, since the spec
  * allows for example the M_Timer to be delegated to the U-mode.
  */
-function getPendingSet(priv : Privilege) -> option((xlenbits, Privilege)) = {
+function getPendingSet(priv : Privilege, virt: Virtualization) -> option((xlenbits, Privilege, Virtualization)) = {
   assert(haveUsrMode(), "no user mode: M/U or M/S/U system required");
   let effective_pending = mip.bits() & mie.bits();
   if  effective_pending == zero_extend(0b0) then None() /* fast path */
@@ -195,23 +196,25 @@ function getPendingSet(priv : Privilege) -> option((xlenbits, Privilege)) = {
      * while lower privileges are blocked.  An unsupported privilege is
      * considered blocked.
      */
+    let del_v = V0; // Bug: delegation virtualization may differ from V0 or original one
+    // let mIE = if priv == Machine then mstatus.MIE() == 0b1 else true;
     let mIE = priv != Machine | (priv == Machine & mstatus.MIE() == 0b1);
     let sIE = haveSupMode() & (priv == User | (priv == Supervisor & mstatus.SIE() == 0b1));
     let uIE = haveNExt() & (priv == User & mstatus.UIE() == 0b1);
     match processPending(mip, mie, mideleg.bits(), mIE) {
       Ints_Empty()      => None(),
-      Ints_Pending(p)   => let r = (p, Machine) in Some(r),
+      Ints_Pending(p)   => let r = (p, Machine, V0) in Some(r),
       Ints_Delegated(d) =>
         if not(haveSupMode()) then {
-          if uIE then let r = (d, User) in Some(r)
+          if uIE then let r = (d, User, del_v) in Some(r)
           else                             None()
         } else {
           /* the delegated bits are pending for S-mode */
           match processPending(Mk_Minterrupts(d), mie, sideleg.bits(), sIE) {
             Ints_Empty()      => None(),
-            Ints_Pending(p)   => let r = (p, Supervisor) in Some(r),
+            Ints_Pending(p)   => let r = (p, Supervisor, del_v) in Some(r),
             Ints_Delegated(d) => if   uIE
-                                 then let r = (d, User) in Some(r)
+                                 then let r = (d, User, del_v) in Some(r)
                                  else None()
           }
         }
@@ -222,7 +225,7 @@ function getPendingSet(priv : Privilege) -> option((xlenbits, Privilege)) = {
 /* Examine the current interrupt state and return an interrupt to be *
  * handled (if any), and the privilege it should be handled at.
  */
-function dispatchInterrupt(priv : Privilege) -> option((InterruptType, Privilege)) = {
+function dispatchInterrupt(priv : Privilege, virt: Virtualization) -> option((InterruptType, Privilege, Virtualization)) = {
   /* If we don't have different privilege levels, we don't need to check delegation.
    * Absence of U-mode implies absence of S-mode.
    */
@@ -230,15 +233,15 @@ function dispatchInterrupt(priv : Privilege) -> option((InterruptType, Privilege
     assert(priv == Machine, "invalid current privilege");
     let enabled_pending = mip.bits() & mie.bits();
     match findPendingInterrupt(enabled_pending) {
-      Some(i) => let r = (i, Machine) in Some(r),
+      Some(i) => let r = (i, Machine, V0) in Some(r),
       None()  => None()
     }
   } else {
-    match getPendingSet(priv) {
+    match getPendingSet(priv, virt) {
       None()      => None(),
-      Some(ip, p) => match findPendingInterrupt(ip) {
+      Some(ip, del_p, del_v) => match findPendingInterrupt(ip) {
                        None()  => None(),
-                       Some(i) => let r = (i, p) in Some(r)
+                       Some(i) => let r = (i, del_p, del_v) in Some(r)
                      }
     }
   }
