@@ -1,0 +1,83 @@
+= Notes on the Interrupt part of the Sail RISC-V Spec
+
+NOTE: this is an AsciiDoc document and can be processed into
+      browser-readable HTML by the free, open-source tool
+      `asciidoctor`.
+
+NOTE: If you are a code maintainer, kindly update this document if
+      there are any significant developements in interrupt code.
+
+== Control and Status Registers
+
+=== Interrupt pending bits
+
+`sip`, `hip` & `hvip` are views of `mip` in the current sail model. This is consistent with the rest of the model's way to express read access of shared bits in different CSRs.
+
+WARNING: Despite all `+xip+` CRSs are views of `+mip+` it isn't the case that a write to any of these CSRs can only update a subset of the bits that a write to `+mip+` might update.
+         For example: `+csrw mip ...+` is unable to modify `+VSSIP+` whereas `+csrw hvip ...+` is.
+
+
+ifdef::env-github[[source,mermaid]]
+ifndef::env-github[[mermaid]]
+....
+graph TD;
+classDef ro font-family: monospace, stroke-dasharray: 5;
+classDef rw font-family: monospace;
+
+read-write:::rw ~~~ read-only:::ro
+
+subgraph mip
+  m_SGEI[SGEIP]:::ro
+  m_MEI[MEIP]:::ro
+  m_VSEI[VSEIP]:::ro
+  m_SEI[SEIP]:::rw
+  m_MTI[MTIP]:::ro
+  m_VSTI[VSTIP]:::ro
+  m_STI[STIP]:::rw
+  m_MSI[MSIP]:::ro
+  m_VSSI[VSSIP]:::ro
+  m_SSI[SSIP]:::rw
+end
+
+subgraph sip
+  s_SEI[SEIP]:::ro
+  s_STI[STIP]:::ro
+  s_SSI[SSIP]:::rw
+end
+
+subgraph hip
+  h_SGEI[SGEIP]:::ro
+  h_VSEI[VSEIP]:::ro
+  h_VSTI[VSTIP]:::ro
+  h_VSSI[VSSIP]:::rw
+end
+
+subgraph hvip
+  hv_VSEI[VSEIP]
+  hv_VSTI[VSTIP]
+  hv_VSSI[VSSIP]
+end
+
+subgraph vsip
+  vs_SEI[SEIP]:::ro
+  vs_STI[STIP]:::ro
+  vs_SSI[SSIP]:::rw
+end
+
+m_SEI ---- s_SEI
+m_STI ---- s_STI
+m_SSI ---- s_SSI
+
+m_VSEI ---- hv_VSEI
+m_VSTI ---- hv_VSTI
+m_VSSI ---- hv_VSSI
+
+m_SGEI  ---- h_SGEI
+hv_VSEI ---- h_VSEI
+hv_VSTI ---- h_VSTI
+hv_VSSI ---- h_VSSI
+
+h_VSEI ---- vs_SEI
+h_VSTI ---- vs_STI
+h_VSSI ---- vs_SSI
+....
