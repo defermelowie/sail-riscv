@@ -1,4 +1,6 @@
 = Notes on the Interrupt part of the Sail RISC-V Spec
+:source-highlighter: highlight.js
+:icons: font
 
 NOTE: this is an AsciiDoc document and can be processed into
       browser-readable HTML by the free, open-source tool
