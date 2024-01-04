@@ -86,11 +86,11 @@ function step(step_no : int) -> bool = {
   minstret_increment = mcountinhibit.IR() == 0b0;
 
   let (retired, stepped) : (Retired, bool) =
-    match dispatchInterrupt(cur_privilege) {
-      Some(intr, priv) => {
-        if   get_config_print_instr()
-        then print_bits("Handling interrupt: ", interruptType_to_bits(intr));
-        handle_interrupt(intr, priv, V0); /* FIXME: Not all interrupts are V0 probably */
+    match dispatchInterrupt(cur_privilege, cur_virtualization) {
+      Some(intr, priv, virt) => {
+        if   get_config_print_platform()
+        then print_platform("trapping from " ^ to_str(cur_privilege, cur_virtualization) ^ " to " ^ to_str(priv, virt) ^ " to handle " ^ to_str(intr));
+        handle_interrupt(intr, priv, virt);
         (RETIRE_FAIL, false)
       },
       None() => {

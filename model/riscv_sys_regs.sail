@@ -446,20 +446,21 @@ register mip     : Minterrupts /* Pending */
 register mie     : Minterrupts /* Enabled */
 register mideleg : Minterrupts /* Delegation to S-mode */
 
+// Legalize mip from the previous mip (m) and the written mip (m)
 function legalize_mip(o : Minterrupts, v : xlenbits) -> Minterrupts = {
-  /* The only writable bits are the S-mode bits, and with the 'N'
-   * extension, the U-mode bits. */
   let v = Mk_Minterrupts(v);
+  /* S-mode bits are writable */
   let m = update_SEI(o, v.SEI());
   let m = update_STI(m, v.STI());
   let m = update_SSI(m, v.SSI());
-  /* TODO: handle SGEI, VSEI, VSTI & VSSI */
-  if haveUsrMode() & haveNExt() then {
-    let m = update_UEI(m, v.UEI());
-    let m = update_UTI(m, v.UTI());
-    let m = update_USI(m, v.USI());
-    m
-  } else m
+  /* When the 'N' extension is present, U-mode bits are writable as well */
+  let m = if haveUsrMode() & haveNExt() then update_UEI(m, v.UEI()) else m;
+  let m = if haveUsrMode() & haveNExt() then update_UTI(m, v.UTI()) else m;
+  let m = if haveUsrMode() & haveNExt() then update_USI(m, v.USI()) else m;
+  /* As SGEI, VSEI, VSTI & VSSI in mip are aliases for their corresponding bits
+  in hip, only mip.VSSI is writable */
+  let m = if haveHExt() then update_VSSI(m, v.VSSI()) else m;
+  m
 }
 
 function legalize_mie(o : Minterrupts, v : xlenbits) -> Minterrupts = {
@@ -471,13 +472,10 @@ function legalize_mie(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_STI(m, v.STI());
   let m = update_SSI(m, v.SSI());
   /* These interrupts can only be enabled when the hypervisor extention is present */
-  if haveHExt() then {
-    /* FIXME: "the nonzero bits in sie & hie(=mie) are mutually exlusive" */
-    let m = update_SGEI(m, v.SGEI());
-    let m = update_VSEI(m, v.VSEI());
-    let m = update_VSTI(m, v.VSTI());
-    let m = update_VSSI(m, v.VSSI());
-  };
+  let m = if haveHExt() then update_SGEI(m, v.SGEI()) else m;
+  let m = if haveHExt() then update_VSEI(m, v.VSEI()) else m;
+  let m = if haveHExt() then update_VSTI(m, v.VSTI()) else m;
+  let m = if haveHExt() then update_VSSI(m, v.VSSI()) else m;
   /* The U-mode bits will be modified if we have the 'N' extension. */
   if haveUsrMode() & haveNExt() then {
     let m = update_UEI(m, v.UEI());
@@ -494,15 +492,12 @@ function legalize_mideleg(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_MEI(m, 0b0);
   let m = update_MTI(m, 0b0);
   let m = update_MSI(m, 0b0);
-
-  /* VS-mode interrupt delegation bits are "read-only one" when the hypervisor extension is implemented */
-  if haveHExt() then {
-    let m = update_SGEI(m, 0b1); /* TODO: SGEI is "read-only one" only if GEILEN > 0 */
-    let m = update_VSEI(m, 0b1);
-    let m = update_VSTI(m, 0b1);
-    let m = update_VSSI(m, 0b1);
-  };
-
+  /* VS-mode interrupts are always delegated when the H-extesion is present */
+  let m = if haveHExt() then update_VSEI(m, 0b1) else m;
+  let m = if haveHExt() then update_VSTI(m, 0b1) else m;
+  let m = if haveHExt() then update_VSSI(m, 0b1) else m;
+  /* If GEILEN > 0, SGEI is always delegated */
+  let m = if haveHExt() then update_SGEI(m, 0b1) else m;
   m
 }
 
@@ -768,15 +763,14 @@ bitfield Sinterrupts : xlenbits = {
 }
 
 /* Provides the sip read view of mip (m) as delegated by mideleg (d). */
-function lower_mip(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
+function lower_mip_to_sip(m : Minterrupts, d : Minterrupts) -> Sinterrupts = {
   let s : Sinterrupts = Mk_Sinterrupts(zero_extend(0b0));
   let s = update_SEI(s, m.SEI() & d.SEI());
   let s = update_STI(s, m.STI() & d.STI());
   let s = update_SSI(s, m.SSI() & d.SSI());
-
-  let s = update_UEI(s, m.UEI() & d.UEI());
-  let s = update_UTI(s, m.UTI() & d.UTI());
-  let s = update_USI(s, m.USI() & d.USI());
+  let s = if haveNExt() then update_UEI(s, m.UEI() & d.UEI()) else s;
+  let s = if haveNExt() then update_UTI(s, m.UTI() & d.UTI()) else s;
+  let s = if haveNExt() then update_USI(s, m.USI() & d.USI()) else s;
   s
 }
 

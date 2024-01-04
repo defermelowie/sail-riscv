@@ -86,7 +86,7 @@ function clause ext_read_CSR(0x040) = Some(uscratch)
 function clause ext_read_CSR(0x041) = Some(get_xret_target(User, V0) & pc_alignment_mask())
 function clause ext_read_CSR(0x042) = Some(ucause.bits())
 function clause ext_read_CSR(0x043) = Some(utval)
-function clause ext_read_CSR(0x044) = Some(lower_sip(lower_mip(mip, mideleg), sideleg).bits())
+function clause ext_read_CSR(0x044) = Some(lower_sip(lower_mip_to_sip(mip, mideleg), sideleg).bits())
 
 function clause ext_write_CSR(0x000, value) = { mstatus = legalize_ustatus(mstatus, value); Some(mstatus.bits()) }
 function clause ext_write_CSR(0x004, value) = { let sie = legalize_uie(lower_mie(mie, mideleg), sideleg, value);
@@ -97,6 +97,6 @@ function clause ext_write_CSR(0x040, value) = { uscratch = value; Some(uscratch)
 function clause ext_write_CSR(0x041, value) = { Some(set_xret_target(User, V0, value)) }
 function clause ext_write_CSR(0x042, value) = { ucause->bits() = value; Some(ucause.bits()) }
 function clause ext_write_CSR(0x043, value) = { utval = value; Some(utval) }
-function clause ext_write_CSR(0x044, value) = { let sip = legalize_uip(lower_mip(mip, mideleg), sideleg, value);
+function clause ext_write_CSR(0x044, value) = { let sip = legalize_uip(lower_mip_to_sip(mip, mideleg), sideleg, value);
                                                  mip = lift_sip(mip, mideleg, sip);
                                                  Some(mip.bits()) }
