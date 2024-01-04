@@ -1,6 +1,7 @@
-= Notes on the Interrupt part of the Sail RISC-V Spec
-:source-highlighter: highlight.js
+= Notes on Interrupts in the Sail RISC-V Spec
+:source-highlighter: rouge
 :icons: font
+:sail-doc: sail_doc/riscv_RV64.json
 
 NOTE: this is an AsciiDoc document and can be processed into
       browser-readable HTML by the free, open-source tool
@@ -37,7 +38,7 @@ subgraph mip
   m_VSTI[VSTIP]:::ro
   m_STI[STIP]:::rw
   m_MSI[MSIP]:::ro
-  m_VSSI[VSSIP]:::ro
+  m_VSSI[VSSIP]:::rw
   m_SSI[SSIP]:::rw
 end
 
@@ -55,9 +56,9 @@ subgraph hip
 end
 
 subgraph hvip
-  hv_VSEI[VSEIP]
-  hv_VSTI[VSTIP]
-  hv_VSSI[VSSIP]
+  hv_VSEI[VSEIP]:::rw
+  hv_VSTI[VSTIP]:::rw
+  hv_VSSI[VSSIP]:::rw
 end
 
 subgraph vsip
@@ -83,3 +84,7 @@ h_VSEI ---- vs_SEI
 h_VSTI ---- vs_STI
 h_VSSI ---- vs_SSI
 ....
+
+ifndef::env-github[]
+sail::legalize_mip[from=sail-doc]
+endif::[]
