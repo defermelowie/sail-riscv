@@ -141,8 +141,6 @@ function init_hext() -> unit = {
   /* TODO: init hgeie */
   htval = zeros();
   htinst = zeros();
-  /* TODO: init hip */
-  /* TODO: init hvip */
   /* TODO: init hgeip */
   /* TODO: init henvcfg */
   /* TODO: init henvcfgh */

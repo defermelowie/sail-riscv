@@ -1,27 +1,133 @@
-= Notes on Interrupts in the Sail RISC-V Spec
 :source-highlighter: rouge
-:icons: font
+:imagesdir: figs/
 :sail-doc: sail_doc/riscv_RV64.json
+:stem:
+
+= Notes on Interrupts in the Sail RISC-V Spec
+Lowie Deferme <lowie.deferme@kuleuven.be>
 
 NOTE: this is an AsciiDoc document and can be processed into
       browser-readable HTML by the free, open-source tool
       `asciidoctor`.
 
 NOTE: If you are a code maintainer, kindly update this document if
-      there are any significant developements in interrupt code.
+      there are any significant developments in interrupt code.
 
 == Control and Status Registers
 
 === Interrupt pending bits
 
-`sip`, `hip` & `hvip` are views of `mip` in the current sail model. This is consistent with the rest of the model's way to express read access of shared bits in different CSRs.
+`sip`, `hip` & `hvip` are views of `mip` in the current sail model. This is consistent with the rest of the model's way to express read access of shared bits in multiple CSRs.
 
-WARNING: Despite all `+xip+` CRSs are views of `+mip+` it isn't the case that a write to any of these CSRs can only update a subset of the bits that a write to `+mip+` might update.
-         For example: `+csrw mip ...+` is unable to modify `+VSSIP+` whereas `+csrw hvip ...+` is.
+[WARNING]
+====
+Despite all readable `hvip` bits being a subset of the readable bits in `mip`, the writable `hvip` bits are not a subset of the writable bits in `mip`.
+====
 
+The privileged Spec states for all of the bits in these `xip` registers under which circumstances they become read-only/read-write. For `mip` MEIP, MTIP & MSIP are read-only, while SEIP, STIP & SSIE are read-write.
 
-ifdef::env-github[[source,mermaid]]
-ifndef::env-github[[mermaid]]
+.Spec
+[%collapsible]
+====
+[quote,Privileged Spec: Sec. 3.1.9]
+____
+Bits mip.MEIP and mie.MEIE are the interrupt-pending and interrupt-enable bits for machine-level external interrupts. *MEIP is read-only in mip*, and is set and cleared by a platform-specific interrupt controller.
+
+Bits mip.MTIP and mie.MTIE are the interrupt-pending and interrupt-enable bits for machine timer interrupts. *MTIP is read-only in mip*, and is cleared by writing to the memory-mapped machine-mode timer compare register.
+
+Bits mip.MSIP and mie.MSIE are the interrupt-pending and interrupt-enable bits for machine-level software interrupts. *MSIP is read-only in mip*, and is written by accesses to memory-mapped control registers, which are used by remote harts to provide machine-level interprocessor interrupts.
+
+...
+
+If supervisor mode is implemented, bits mip.SEIP and mie.SEIE are the interrupt-pending and interrupt-enable bits for supervisor-level external interrupts. *SEIP is writable in mip*, and may be written by M-mode software to indicate to S-mode that an external interrupt is pending.
+...
+
+If supervisor mode is implemented, bits mip.STIP and mie.STIE are the interrupt-pending and interrupt-enable bits for supervisor-level timer interrupts. *STIP is writable in mip*, and may be written by M-mode software to deliver timer interrupts to S-mode.
+
+If supervisor mode is implemented, bits mip.SSIP and mie.SSIE are the interrupt-pending and interrupt-enable bits for supervisor-level software interrupts. *SSIP is writable in mip* and may also be set to 1 by a platform-specific interrupt controller.
+____
+====
+
+All VS-level bits (VSEIP, VSTIP & VSSIP) in `hvip` are writable.
+
+.Spec
+[%collapsible]
+====
+[quote,Privileged Spec: Sec. 9.2.3]
+____
+Bits *VSEIP, VSTIP, and VSSIP of hvip are writable*. Setting VSEIP=1 in hvip asserts a VS-level external interrupt; setting VSTIP asserts a VS-level timer interrupt; and setting VSSIP asserts a VS-level software interrupt.
+____
+====
+
+In `hip` SGEIP, VSEIP & VSTIP are read-only whereas VSSIP is writable.
+
+.Spec
+[%collapsible]
+====
+[quote,Privileged Spec: Sec. 9.2.3]
+____
+Bits hip.SGEIP and hie.SGEIE are the interrupt-pending and interrupt-enable bits for guest external interrupts at supervisor level (HS-level). *SGEIP is read-only in hip*, and is 1 if and only if the bitwise logical-AND of CSRs hgeip and hgeie is nonzero in any bit.
+
+Bits hip.VSEIP and hie.VSEIE are the interrupt-pending and interrupt-enable bits for VS-level external interrupts. *VSEIP is read-only in hip*...
+
+Bits hip.VSTIP and hie.VSTIE are the interrupt-pending and interrupt-enable bits for VS-level timer interrupts. *VSTIP is read-only in hip*, and is the logical-OR of hvip.VSTIP and any other platform-specific timer interrupt signal directed to VS-level.
+
+Bits hip.VSSIP and hie.VSSIE are the interrupt-pending and interrupt-enable bits for VS-level software interrupts. *VSSIP in hip is an alias (writable) of the same bit in hvip*.
+____
+====
+
+With regards to `mip` the Spec mentions that SGEIP, VSEIP, VSTIP, and VSSIP are aliases of their corresponding bits in `hip`. Therefore, the SGEIP, VSEIP & VSTIP bits in `mip` are read-only whereas VSSIP is writable.
+
+.Spec
+[%collapsible]
+====
+[quote,Privileged Spec: Sec. 9.4.3]
+____
+Bits SGEIP, VSEIP, VSTIP, and VSSIP in mip are aliases for the same bits in hypervisor CSR hip
+____
+====
+
+`sip` exposes two read-only bits: SEIP & STIP; and one read-write bit: SSIP.
+
+.Spec
+[%collapsible]
+====
+[quote,Privileged Spec: Sec. 5.1.3]
+____
+Bits sip.SEIP and sie.SEIE are the interrupt-pending and interrupt-enable bits for supervisor-level external interrupts. If implemented, *SEIP is read-only in sip*, and is set and cleared by the execution environment, typically through a platform-specific interrupt controller.
+
+Bits sip.STIP and sie.STIE are the interrupt-pending and interrupt-enable bits for supervisor-level timer interrupts. If implemented, *STIP is read-only in sip*, and is set and cleared by the execution environment.
+
+Bits sip.SSIP and sie.SSIE are the interrupt-pending and interrupt-enable bits for supervisor-level software interrupts. If implemented, *SSIP is writable in sip* and may also be set to 1 by a platform-specific interrupt controller.
+
+...
+
+Restricted views of the mip and mie registers appear as the sip and sie registers for supervisor level. If an interrupt is delegated to S-mode by setting a bit in the mideleg register, it becomes visible in the sip register and is maskable using the sie register. Otherwise, the corresponding bits in sip and sie are read-only zero.
+____
+====
+
+Since VS-bits in `vsip` might be aliases of their corresponding S-bits in `hip`, SEIP & STIP bits in `vsip` are read-only whereas SSIP writable when delegated by hideleg.
+
+.Spec
+[%collapsible]
+====
+[quote,Privileged Spec: Sec. 9.2.12]
+____
+When bit 10 of hideleg is zero, vsip.SEIP and vsie.SEIE are read-only zeros. Else, vsip.SEIP and vsie.SEIE are aliases of hip.VSEIP and hie.VSEIE.
+
+When bit 6 of hideleg is zero, vsip.STIP and vsie.STIE are read-only zeros. Else, vsip.STIP and vsie.STIE are aliases of hip.VSTIP and hie.VSTIE.
+
+When bit 2 of hideleg is zero, vsip.SSIP and vsie.SSIE are read-only zeros. Else, vsip.SSIP and vsie.SSIE are aliases of hip.VSSIP and hie.VSSIE.
+____
+====
+
+These relationships between interrupt pending bits are illustrated by the figure below.
+
+ifdef::env-github[]
+image::xip_relations.svg[Relations between xip registers]
+endif::[]
+ifndef::env-github[]
+[mermaid, target=xip_relations, format=svg, theme=neutral]
 ....
 graph TD;
 classDef ro font-family: monospace, stroke-dasharray: 5;
@@ -67,9 +173,9 @@ subgraph vsip
   vs_SSI[SSIP]:::rw
 end
 
-m_SEI ---- s_SEI
-m_STI ---- s_STI
-m_SSI ---- s_SSI
+m_SEI -..- s_SEI
+m_STI -..- s_STI
+m_SSI -..- s_SSI
 
 m_VSEI ---- hv_VSEI
 m_VSTI ---- hv_VSTI
@@ -80,11 +186,30 @@ hv_VSEI ---- h_VSEI
 hv_VSTI ---- h_VSTI
 hv_VSSI ---- h_VSSI
 
-h_VSEI ---- vs_SEI
-h_VSTI ---- vs_STI
-h_VSSI ---- vs_SSI
+h_VSEI -..- vs_SEI
+h_VSTI -..- vs_STI
+h_VSSI -..- vs_SSI
 ....
+endif::[]
+
+// -----------------------------------------------------------------------------
 
 ifndef::env-github[]
+
+In the Sail model, writable bits are enforced by the following legalize functions.
+
 sail::legalize_mip[from=sail-doc]
+sail::legalize_sip[from=sail-doc]
+sail::lift_sip[from=sail-doc]
+sail::legalize_vsip[from=sail-doc]
+sail::legalize_hip[from=sail-doc]
+sail::legalize_hvip[from=sail-doc]
+
+In order to limit the readable interrupt pending bits for `xip` registers, the following functions are defined:
+
+sail::lower_mip_to_sip[from=sail-doc]
+sail::lower_mip_to_vsip[from=sail-doc]
+sail::lower_mip_to_hvip[from=sail-doc]
+sail::lower_mip_to_hip[from=sail-doc]
+
 endif::[]

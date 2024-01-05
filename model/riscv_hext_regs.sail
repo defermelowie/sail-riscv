@@ -144,8 +144,63 @@ function legalize_hedeleg(o: Medeleg, v: xlenbits) -> Medeleg = {
   h
 }
 
-/* TODO: hideleg */
-/* TODO: hie */
+register hideleg : Minterrupts /* Delegation to VS-mode */
+
+function legalize_hideleg(h : Minterrupts, v : xlenbits) -> Minterrupts = {
+  let v = Mk_Minterrupts(v);
+  /* VS-level interrupts can be delegated */
+  let h = update_VSEI(h, v.VSEI());
+  let h = update_VSTI(h, v.VSTI());
+  let h = update_VSSI(h, v.VSSI());
+  /* Other interrupts can't be delegated to VS-mode */
+  // FIXME: what about SGEI?
+  h
+}
+
+
+/* **************************************************************** */
+/* Hypervisor Interrupt enable/pending registers                    */
+
+/* hvip is a view of mip, so there is no register defined. */
+/* hip is a view of mip, so there is no register defined. */
+/* TODO: hie is a view of mie, so there is no register defined. */
+// TODO: legalize_hie, lower_mie_to_hie?
+
+/*! Returns new mip from the previous mip (m) and the written hvip (v) */
+function legalize_hvip(m: Minterrupts, v : xlenbits) -> Minterrupts = {
+  let v = Mk_Minterrupts(v);
+  let m = update_VSEI(m, v.VSEI());
+  let m = update_VSTI(m, v.VSTI());
+  let m = update_VSSI(m, v.VSSI());
+  m
+}
+
+/*! Returns hvip view of mip (m) */
+function lower_mip_to_hvip(m : Minterrupts) -> Minterrupts = {
+  let h = Mk_Minterrupts(zeros());
+  let h = update_VSEI(h, m.VSEI());
+  let h = update_VSTI(h, m.VSTI());
+  let h = update_VSSI(h, m.VSSI());
+  h
+}
+
+/*! Returns new mip from the previous mip (m) and the written hip (v) */
+function legalize_hip(m : Minterrupts, v : xlenbits) -> Minterrupts = {
+  let v = Mk_Minterrupts(v);
+  let m = update_VSSI(m, v.VSSI());
+  m
+}
+
+/*! Returns hip view of mip (m) */
+function lower_mip_to_hip(m : Minterrupts) -> Minterrupts = {
+  let h = Mk_Minterrupts(zeros());
+  let h = update_SGEI(h, m.SGEI()); // TODO: Check hgeip and hgeie
+  let h = update_VSEI(h, m.VSEI());
+  let h = update_VSTI(h, m.VSTI());
+  let h = update_VSSI(h, m.VSSI());
+  h
+}
+
 
 /* **************************************************************** */
 /* Hypervisor hpm-related registers                                 */
@@ -270,7 +325,30 @@ register vscause : Mcause
 register vstval : xlenbits
 
 /* **************************************************************** */
-/* TODO: Virtual Supervisor interrupt pending                       */
+/* Virtual Supervisor interrupt enable/pending registers            */
+
+/* vsip is a view of mip, so there is no register defined. */
+/* TODO: hie is a view of vsie, so there is no register defined. */
+
+/*! Returns new mip from the previous mip (m) and the written vsip (v) as delegated by hideleg (d) */
+function legalize_vsip(m: Minterrupts, d : Minterrupts, v : xlenbits) -> Minterrupts = {
+  let v = Mk_Minterrupts(v);
+  /* Since S-mode bits in vsip are aliases for their corresponding VS-mode bits
+     in hip when delegated by hideleg, only vsip.SSIP (hip.VSSIP) might be writable */
+  let m = update_VSSI(m, v.SSI() & d.VSSI());
+  m
+}
+
+/*! Returns vsip view of mip (m) as delegated by hideleg (d) */
+function lower_mip_to_vsip(m : Minterrupts, d : Minterrupts) -> Minterrupts = {
+  let vs = Mk_Minterrupts(zeros());
+  /* Standard S-mode bits in vsip are aliases of corresponding VS-mode bits in
+     hip if delegated by hideleg */
+  let vs = update_SEI(vs, m.VSEI() & d.VSEI());
+  let vs = update_STI(vs, m.VSTI() & d.VSTI());
+  let vs = update_SSI(vs, m.VSSI() & d.VSSI());
+  vs
+}
 
 /* **************************************************************** */
 /* Virtual Supervisor address translation & Protection              */
