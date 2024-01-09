@@ -162,9 +162,6 @@ function legalize_hideleg(h : Minterrupts, v : xlenbits) -> Minterrupts = {
 /* Hypervisor Interrupt enable/pending registers                    */
 
 /* hvip is a view of mip, so there is no register defined. */
-/* hip is a view of mip, so there is no register defined. */
-/* TODO: hie is a view of mie, so there is no register defined. */
-// TODO: legalize_hie, lower_mie_to_hie?
 
 /*! Returns new mip from the previous mip (m) and the written hvip (v) */
 function legalize_hvip(m: Minterrupts, v : xlenbits) -> Minterrupts = {
@@ -172,6 +169,7 @@ function legalize_hvip(m: Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_VSEI(m, v.VSEI());
   let m = update_VSTI(m, v.VSTI());
   let m = update_VSSI(m, v.VSSI());
+  // TODO: Update non-standard portion
   m
 }
 
@@ -181,13 +179,17 @@ function lower_mip_to_hvip(m : Minterrupts) -> Minterrupts = {
   let h = update_VSEI(h, m.VSEI());
   let h = update_VSTI(h, m.VSTI());
   let h = update_VSSI(h, m.VSSI());
+  // TODO: Read non-standard portion
   h
 }
+
+/* hip is a view of mip, so there is no register defined. */
 
 /*! Returns new mip from the previous mip (m) and the written hip (v) */
 function legalize_hip(m : Minterrupts, v : xlenbits) -> Minterrupts = {
   let v = Mk_Minterrupts(v);
   let m = update_VSSI(m, v.VSSI());
+  // TODO: Update non-standard portion
   m
 }
 
@@ -198,6 +200,33 @@ function lower_mip_to_hip(m : Minterrupts) -> Minterrupts = {
   let h = update_VSEI(h, m.VSEI());
   let h = update_VSTI(h, m.VSTI());
   let h = update_VSSI(h, m.VSSI());
+  // TODO: Read non-standard portion
+  h
+}
+
+/* hie is a view of mie, so there is no register defined. */
+
+/*! Returns new mie from the previous mie (m) and the written hie (v) */
+function legalize_hie(m : Minterrupts, v : xlenbits) -> Minterrupts = {
+  let v = Mk_Minterrupts(v);
+  let m = update_SGEI(m, v.SGEI());
+  let m = update_VSEI(m, v.VSEI());
+  let m = update_VSTI(m, v.VSTI());
+  let m = update_VSSI(m, v.VSSI());
+  /* Note: Writable bits in sie are read-only zero in hie */
+  // TODO: Update non-standard portion
+  m
+}
+
+/*! Returns hie view of mie */
+function lower_mie_to_hie(m : Minterrupts) -> Minterrupts = {
+  let h = Mk_Minterrupts(zeros());
+  let h = update_SGEI(h, m.SGEI());
+  let h = update_VSEI(h, m.VSEI());
+  let h = update_VSTI(h, m.VSTI());
+  let h = update_VSSI(h, m.VSSI());
+  /* Note: Writable bits in sie are read-only zero in hie */
+  // TODO: Read non-standard portion
   h
 }
 
@@ -328,7 +357,6 @@ register vstval : xlenbits
 /* Virtual Supervisor interrupt enable/pending registers            */
 
 /* vsip is a view of mip, so there is no register defined. */
-/* TODO: hie is a view of vsie, so there is no register defined. */
 
 /*! Returns new mip from the previous mip (m) and the written vsip (v) as delegated by hideleg (d) */
 function legalize_vsip(m: Minterrupts, d : Minterrupts, v : xlenbits) -> Minterrupts = {
@@ -344,6 +372,28 @@ function lower_mip_to_vsip(m : Minterrupts, d : Minterrupts) -> Minterrupts = {
   let vs = Mk_Minterrupts(zeros());
   /* Standard S-mode bits in vsip are aliases of corresponding VS-mode bits in
      hip if delegated by hideleg */
+  let vs = update_SEI(vs, m.VSEI() & d.VSEI());
+  let vs = update_STI(vs, m.VSTI() & d.VSTI());
+  let vs = update_SSI(vs, m.VSSI() & d.VSSI());
+  vs
+}
+
+/* hie is a view of vsie, so there is no register defined. */
+
+/*! Returns new mie from previous mie (m) and the written vsie (v) as delegated by hideleg (d) */
+function legalize_vsie(m : Minterrupts, d : Minterrupts, v : xlenbits) -> Minterrupts = {
+  let v = Mk_Minterrupts(v);
+  let m = update_VSEI(m, v.SEI() & d.VSEI());
+  let m = update_VSTI(m, v.STI() & d.VSTI());
+  let m = update_VSSI(m, v.SSI() & d.VSSI());
+  m
+}
+
+/*! Returns vsie view of mie (m) as delegated by hideleg (d) */
+function lower_mie_to_vsie(m : Minterrupts, d : Minterrupts) -> Minterrupts = {
+  let vs = Mk_Minterrupts(zeros());
+  /* Standard S-mode bits in vsie are aliases of corresponding VS-mode bits in
+    hie if delegated by hideleg */
   let vs = update_SEI(vs, m.VSEI() & d.VSEI());
   let vs = update_STI(vs, m.VSTI() & d.VSTI());
   let vs = update_SSI(vs, m.VSSI() & d.VSSI());

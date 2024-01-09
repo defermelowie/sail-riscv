@@ -472,13 +472,10 @@ function legalize_mie(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_STI(m, v.STI());
   let m = update_SSI(m, v.SSI());
   /* These interrupts can only be enabled when the hypervisor extention is present */
-  if haveHExt() then {
-    /* FIXME: "the nonzero bits in sie(=mie) & hie are mutually exlusive" */
-    let m = update_SGEI(m, v.SGEI());
-    let m = update_VSEI(m, v.VSEI());
-    let m = update_VSTI(m, v.VSTI());
-    let m = update_VSSI(m, v.VSSI());
-  };
+  let m = if haveHExt() then update_SGEI(m, v.SGEI()) else m;
+  let m = if haveHExt() then update_VSEI(m, v.VSEI()) else m;
+  let m = if haveHExt() then update_VSTI(m, v.VSTI()) else m;
+  let m = if haveHExt() then update_VSSI(m, v.VSSI()) else m;
   /* The U-mode bits will be modified if we have the 'N' extension. */
   if haveUsrMode() & haveNExt() then {
     let m = update_UEI(m, v.UEI());

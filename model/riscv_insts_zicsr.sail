@@ -156,7 +156,7 @@ function readCSR csr : csreg -> xlenbits = {
     (0x600,  _) => hstatus.bits(),
     (0x602,  _) => hedeleg.bits(),
     (0x603,  _) => hideleg.bits(),
-    // (0x604,  _) => hie,
+    (0x604,  _) => lower_mie_to_hie(mie).bits(),
     (0x606,  _) => zero_extend(hcounteren.bits()),
     // (0x607,  _) => hgeie,
     (0x643,  _) => htval,
@@ -188,7 +188,7 @@ function readCSR csr : csreg -> xlenbits = {
 
     /* virtual supervisor mode */
     (0x200,  _) => vsstatus.bits(),
-    // (0x204,  _) => vsie,
+    (0x204,  _) => lower_mie_to_vsie(mie, hideleg).bits(),
     (0x205,  _) => get_trap_vector(Supervisor, V1),
     (0x240,  _) => vsscratch,
     (0x241,  _) => get_xret_target(Supervisor, V1),
@@ -280,6 +280,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x600,  _) => { hstatus = legalize_hstatus(hstatus, value); Some(hstatus.bits()) },
     (0x602,  _) => { hedeleg = legalize_hedeleg(hedeleg, value); Some(hedeleg.bits()) },
     (0x603,  _) => { hideleg = legalize_hideleg(hideleg, value); Some(hideleg.bits()) },
+    (0x604,  _) => { mie = legalize_hie(mie, value); Some(lower_mie_to_hie(mie).bits()) },
     (0x606,  _) => { hcounteren = legalize_hcounteren(hcounteren, value); Some(zero_extend(hcounteren.bits())) },
     (0x643,  _) => { htval = value; Some(htval) },
     (0x644,  _) => { mip = legalize_hip(mip, value); Some(lower_mip_to_hip(mip).bits()) },
@@ -321,6 +322,7 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
 
     /* virtual supervisor mode */
     (0x200,  _) => { vsstatus = legalize_vsstatus(vsstatus, value); Some(vsstatus.bits()) },
+    (0x204,  _) => { mie = legalize_vsie(mie, hideleg, value); Some(lower_mie_to_vsie(mie, hideleg).bits()) },
     (0x205,  _) => { Some(set_trap_vector(Supervisor, V1, value)) },
     (0x240,  _) => { vsscratch = value; Some(vsscratch) },
     (0x241,  _) => { Some(set_xret_target(Supervisor, V1, value)) },

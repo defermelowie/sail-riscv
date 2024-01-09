@@ -6,9 +6,18 @@
 = Notes on Interrupts in the Sail RISC-V Spec
 Lowie Deferme <lowie.deferme@kuleuven.be>
 
-NOTE: this is an AsciiDoc document and can be processed into
-      browser-readable HTML by the free, open-source tool
-      `asciidoctor`.
+[NOTE]
+====
+This is an AsciiDoc document and can be processed into
+browser-readable HTML by the free, open-source tool
+`asciidoctor`:
+
+[source, bash]
+----
+$ make sail_doc/riscv_RV64.json
+$ asciidoctor -r asciidoctor-diagram -r asciidoctor-sail doc/notes_Interrupts.adoc
+----
+====
 
 NOTE: If you are a code maintainer, kindly update this document if
       there are any significant developments in interrupt code.
@@ -19,10 +28,7 @@ NOTE: If you are a code maintainer, kindly update this document if
 
 `sip`, `hip` & `hvip` are views of `mip` in the current sail model. This is consistent with the rest of the model's way to express read access of shared bits in multiple CSRs.
 
-[WARNING]
-====
-Despite all readable `hvip` bits being a subset of the readable bits in `mip`, the writable `hvip` bits are not a subset of the writable bits in `mip`.
-====
+WARNING: Despite all readable `hvip` bits being a subset of the readable bits in `mip`, the writable `hvip` bits are not a subset of the writable bits in `mip`.
 
 The privileged Spec states for all of the bits in these `xip` registers under which circumstances they become read-only/read-write. For `mip` MEIP, MTIP & MSIP are read-only, while SEIP, STIP & SSIE are read-write.
 
@@ -192,8 +198,7 @@ h_VSSI -..- vs_SSI
 ....
 endif::[]
 
-// -----------------------------------------------------------------------------
-
+// Do not show on github since asciidoctor-sail is required
 ifndef::env-github[]
 
 In the Sail model, writable bits are enforced by the following legalize functions.
