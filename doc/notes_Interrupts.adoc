@@ -4,7 +4,9 @@
 :stem:
 
 = Notes on Interrupts in the Sail RISC-V Spec
-Lowie Deferme <lowie.deferme@kuleuven.be>
+Lowie Deferme <lowie.deferme@kuleuven.be>:
+
+:toc: auto
 
 [NOTE]
 ====
@@ -33,9 +35,7 @@ NOTE: If you are a code maintainer, kindly update this document if
 - [ ] Virtual supervisor external interrupt due to `hgeip[hstatus.VGEIN]` being 1
 - [ ] Supervisor guest external interrupts by `or_reduce(and_bitwise(hgeie,hgeip))`
 
-== Control and Status Registers
-
-=== Interrupt pending bits
+== Interrupt pending bits
 
 `sip`, `hip` & `hvip` are views of `mip` in the current sail model. This is consistent with the rest of the model's way to express read access of shared bits in multiple CSRs.
 
@@ -228,4 +228,66 @@ sail::lower_mip_to_vsip[from=sail-doc]
 sail::lower_mip_to_hvip[from=sail-doc]
 sail::lower_mip_to_hip[from=sail-doc]
 
+endif::[]
+
+== Interrupt delegation
+
+ifdef::env-github[]
+image::interrupt_delegation.svg[How interrupts are delegated]
+endif::[]
+ifndef::env-github[]
+[mermaid, target=interrupt_delegation, format=svg, theme=neutral]
+....
+graph TD;
+
+classDef pseudocode font-family: monospace;
+
+pending_interrupt("mip[i] <- 0b1"):::pseudocode
+
+check_m_mode{"priv == M_mode"}:::pseudocode
+check_hs_mode{"priv == HS_mode"}:::pseudocode
+check_vs_mode{"priv == VS_mode"}:::pseudocode
+
+check_mstatus_mie{"mstatus.MIE == 0b1 <br> & mideleg[i] == 0b0"}:::pseudocode
+check_sstatus_sie{"sstatus.SIE == 0b1 <br> & hideleg[i] == 0b0"}:::pseudocode
+check_vsstatus_sie{"vsstatus.SIE == 0b1"}:::pseudocode
+
+check_mideleg{"mideleg[i] == 0b1"}:::pseudocode
+check_hideleg{"hideleg[i] == 0b1"}:::pseudocode
+
+check_virt{"virt == V1"}:::pseudocode
+
+check_mie{"mie[i] == 0b1"}:::pseudocode
+
+trap_none["Do not trap"]
+trap_m["Trap to M-mode"]
+trap_hs["Trap to HS-mode"]
+trap_vs["Trap to VS-mode"]
+
+pending_interrupt ---> check_mie
+
+check_mie --->|true| check_m_mode
+check_mie --->|false| trap_none
+
+check_m_mode --->|true| check_mstatus_mie
+check_m_mode --->|false| check_mideleg
+check_mstatus_mie --->|false| trap_none
+check_mstatus_mie --->|true| trap_m
+check_mideleg --->|false| trap_m
+check_mideleg --->|true| check_hs_mode
+
+check_hs_mode --->|true| check_sstatus_sie
+check_hs_mode --->|false| check_virt
+check_virt --->|false| trap_hs
+check_virt --->|true| check_hideleg
+check_sstatus_sie --->|false| trap_none
+check_sstatus_sie --->|true| trap_hs
+check_hideleg --->|false| trap_hs
+check_hideleg --->|true| check_vs_mode
+
+check_vs_mode --->|true| check_vsstatus_sie
+check_vs_mode --->|false| trap_vs
+check_vsstatus_sie --->|false| trap_none
+check_vsstatus_sie --->|true| trap_vs
+....
 endif::[]
