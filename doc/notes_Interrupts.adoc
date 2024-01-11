@@ -22,6 +22,17 @@ $ asciidoctor -r asciidoctor-diagram -r asciidoctor-sail doc/notes_Interrupts.ad
 NOTE: If you are a code maintainer, kindly update this document if
       there are any significant developments in interrupt code.
 
+== Implementation status
+
+- [x] Machine timer interrupts using CLINT's `MTIME` & `MTIMECMP` memory mapped registers
+- [x] (Virtual) Supervisor timer interrupts by setting them in `mip/hvip`
+- [x] Machine software interrupts using CLINT's `MSIP` memory mapped register
+- [x] (Virtual) Supervisor software interrupts by setting them in `mip/hvip`
+- [ ] Machine external interrupts due to interrupt controller setting `mip.MEIP`
+- [x] (Virtual) Supervisor external interrupts by setting them in `mip/hvip`
+- [ ] Virtual supervisor external interrupt due to `hgeip[hstatus.VGEIN]` being 1
+- [ ] Supervisor guest external interrupts by `or_reduce(and_bitwise(hgeie,hgeip))`
+
 == Control and Status Registers
 
 === Interrupt pending bits

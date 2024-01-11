@@ -97,8 +97,6 @@ function clause ext_is_CSR_defined(0x243, _) = haveHExt() /* vstval */
 function clause ext_is_CSR_defined(0x244, _) = haveHExt() /* vsip */
 function clause ext_is_CSR_defined(0x280, _) = haveHExt() /* vsatp */
 
-// TODO: VS* CSR read access checks
-
 /* Initialize hypervisor extension */
 function init_hext() -> unit = {
   /* Start with V=0 */
@@ -114,8 +112,8 @@ function init_hext() -> unit = {
   then mstatush = set_mstatush_GVA(mstatush, 0b0)
   else mstatus = set_mstatus_GVA(mstatus, 0b0);
 
-  mtinst = zero_extend(0b0);
-  mtval2 = zero_extend(0b0);
+  mtinst = zeros();
+  mtval2 = zeros();
 
   // TODO: init mip
 
@@ -124,7 +122,7 @@ function init_hext() -> unit = {
   mie = update_VSTI(mie, 0b0);
   mie = update_VSSI(mie, 0b0);
 
-  mideleg = update_SGEI(mideleg, 0b1); /* TODO: SGEIE is "read-only one" only if GEILEN > 0 */
+  mideleg = update_SGEI(mideleg, 0b1); /* Note: SGEIE is "read-only one" only if GEILEN > 0 */
   mideleg = update_VSEI(mideleg, 0b1);
   mideleg = update_VSTI(mideleg, 0b1);
   mideleg = update_VSSI(mideleg, 0b1);
@@ -135,30 +133,26 @@ function init_hext() -> unit = {
   hstatus = set_hstatus_VSXL(hstatus, misa.MXL()); /* Dynamic XLEN changes are not (yet) supported */
 
   hedeleg->bits() = zeros();
-  /* TODO: init hideleg */
-  /* TODO: init hie */
-  /* TODO: init hcounteren */
-  /* TODO: init hgeie */
+  hideleg->bits() = zeros();
+  hcounteren->bits() = zeros();
   htval = zeros();
   htinst = zeros();
-  /* TODO: init hgeip */
+  hgeie = legalize_hgeie(zeros());
+  hgeip = zeros();
   /* TODO: init henvcfg */
   /* TODO: init henvcfgh */
-  // hgatp = zero_extend(0b0);
   htimedelta = zeros();
 
   /* Init VS-mode CSRs */
 
-  vsstatus->bits() = zero_extend(0b0);
+  vsstatus->bits() = zeros();
   vsstatus = set_vsstatus_UXL(vsstatus, misa.MXL()); /* Dynamic XLEN changes are not (yet) supported */
-  vstvec->bits() = zero_extend(0b0);
-  vsscratch = zero_extend(0b0);
-  vsepc = zero_extend(0b0);
-  vscause->bits() = zero_extend(0b0);
-  vstval = zero_extend(0b0);
-  /* TODO: init vsie */
-  /* TODO: init vsip */
-  vsatp = zero_extend(0b0);
+  vstvec->bits() = zeros();
+  vsscratch = zeros();
+  vsepc = zeros();
+  vscause->bits() = zeros();
+  vstval = zeros();
+  vsatp = zeros();
 }
 
 /*

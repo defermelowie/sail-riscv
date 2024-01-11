@@ -113,7 +113,7 @@ function legalize_hstatus(o : Hstatus, v : xlenbits) -> Hstatus = {
   let h = update_VTSR(h, v.VTSR());
   let h = update_VTW(h, v.VTW());
   let h = update_VTVM(h, v.VTVM());
-  let h = update_VGEIN(h, v.VGEIN());  /* TODO: Legalize hstatus.vgein */
+  let h = update_VGEIN(h, v.VGEIN());  /* Note: 0 <= hstatus.VGEIN <= GEILEN */
   let h = update_HU(h, v.HU());
   let h = update_SPVP(h, v.SPVP());
   let h = update_SPV(h, v.SPV());
@@ -196,7 +196,7 @@ function legalize_hip(m : Minterrupts, v : xlenbits) -> Minterrupts = {
 /*! Returns hip view of mip (m) */
 function lower_mip_to_hip(m : Minterrupts) -> Minterrupts = {
   let h = Mk_Minterrupts(zeros());
-  let h = update_SGEI(h, m.SGEI()); // TODO: Check hgeip and hgeie
+  let h = update_SGEI(h, m.SGEI());
   let h = update_VSEI(h, m.VSEI());
   let h = update_VSTI(h, m.VSTI());
   let h = update_VSSI(h, m.VSSI());
@@ -243,7 +243,17 @@ function legalize_hcounteren(c : Counteren, v : xlenbits) -> Counteren = {
 register htimedelta : bits(64)
 
 /* **************************************************************** */
-/* TODO: Hypervisor Guest External Interrupt-Enable                 */
+/* Hypervisor Guest External Interrupts                             */
+
+register hgeie : xlenbits
+register hgeip : xlenbits
+// TODO: hgeip should be written by interrupt controller
+// TODO: hip.SGEI is 1 if bitwise and of hgeip and hgeie is nonzero in any bit
+// TODO: hip.VSEI is 1 if hgeip[hstatus.VGEIN] is 1
+
+function legalize_hgeie(v : xlenbits) -> xlenbits = {
+  [v with 0 = bitzero]
+}
 
 /* **************************************************************** */
 /* Machine & Hypervisor trap information                            */

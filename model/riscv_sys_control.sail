@@ -186,9 +186,11 @@ function processPending(xip : Minterrupts, xie : Minterrupts, xideleg : xlenbits
  *
  * We don't use the lowered views of {xie,xip} here, since the spec
  * allows for example the M_Timer to be delegated to the U-mode.
+ *
+ * FIXME: is the statement above still true?
  */
 function getPendingSet(priv : Privilege, virt: Virtualization) -> option((xlenbits, Privilege, Virtualization)) = {
-  assert(haveUsrMode(), "no user mode: M/U or M/S/U system required");
+  assert(haveUsrMode(), "no user mode: M/U, M/S/U or M/HS/VS/U/VU system required");
   let effective_pending = mip.bits() & mie.bits();
   if  effective_pending == zero_extend(0b0) then None() /* fast path */
   else {
@@ -196,11 +198,13 @@ function getPendingSet(priv : Privilege, virt: Virtualization) -> option((xlenbi
      * while lower privileges are blocked.  An unsupported privilege is
      * considered blocked.
      */
+    let mIE  = priv != Machine | (priv == Machine & mstatus.MIE() == 0b1);
+    let sIE  = haveSupMode() & (priv == User | (priv == Supervisor & mstatus.SIE() == 0b1));
+    let uIE  = haveNExt() & (priv == User & mstatus.UIE() == 0b1);
+    let vsIE = haveHExt() & (priv == User | (priv == Supervisor & vsstatus.SIE() == 0b1));
+
     let del_v = V0; // Bug: delegation virtualization may differ from V0 or original one
-    // let mIE = if priv == Machine then mstatus.MIE() == 0b1 else true;
-    let mIE = priv != Machine | (priv == Machine & mstatus.MIE() == 0b1);
-    let sIE = haveSupMode() & (priv == User | (priv == Supervisor & mstatus.SIE() == 0b1));
-    let uIE = haveNExt() & (priv == User & mstatus.UIE() == 0b1);
+
     match processPending(mip, mie, mideleg.bits(), mIE) {
       Ints_Empty()      => None(),
       Ints_Pending(p)   => let r = (p, Machine, V0) in Some(r),
@@ -209,7 +213,7 @@ function getPendingSet(priv : Privilege, virt: Virtualization) -> option((xlenbi
           if uIE then let r = (d, User, del_v) in Some(r)
           else                             None()
         } else {
-          /* the delegated bits are pending for S-mode */
+          /* the delegated bits are pending for HS-mode */
           match processPending(Mk_Minterrupts(d), mie, sideleg.bits(), sIE) {
             Ints_Empty()      => None(),
             Ints_Pending(p)   => let r = (p, Supervisor, del_v) in Some(r),
