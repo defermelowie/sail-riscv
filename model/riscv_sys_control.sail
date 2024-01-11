@@ -149,11 +149,14 @@ function findPendingInterrupt(ip : xlenbits) -> option(InterruptType) = {
   else if ip.SEI() == 0b1 then Some(I_S_External)
   else if ip.SSI() == 0b1 then Some(I_S_Software)
   else if ip.STI() == 0b1 then Some(I_S_Timer)
-  else if ip.UEI() == 0b1 then Some(I_U_External)
-  else if ip.USI() == 0b1 then Some(I_U_Software)
-  else if ip.UTI() == 0b1 then Some(I_U_Timer)
-  // TODO: add hypervisor interrupts
-  else                         None()
+  else if haveHExt() & ip.SGEI() == 0b1 then Some(I_G_External)
+  else if haveHExt() & ip.VSEI() == 0b1 then Some(I_VS_External)
+  else if haveHExt() & ip.VSSI() == 0b1 then Some(I_VS_Software)
+  else if haveHExt() & ip.VSTI() == 0b1 then Some(I_VS_Timer)
+  else if haveNExt() & ip.UEI() == 0b1 then Some(I_U_External)
+  else if haveNExt() & ip.USI() == 0b1 then Some(I_U_Software)
+  else if haveNExt() & ip.UTI() == 0b1 then Some(I_U_Timer)
+  else None()
 }
 
 /* Process the pending interrupts xip at a privilege according to
