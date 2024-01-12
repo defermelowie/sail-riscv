@@ -153,7 +153,6 @@ function legalize_hideleg(h : Minterrupts, v : xlenbits) -> Minterrupts = {
   let h = update_VSTI(h, v.VSTI());
   let h = update_VSSI(h, v.VSSI());
   /* Other interrupts can't be delegated to VS-mode */
-  // FIXME: what about SGEI?
   h
 }
 

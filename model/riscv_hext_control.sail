@@ -115,13 +115,6 @@ function init_hext() -> unit = {
   mtinst = zeros();
   mtval2 = zeros();
 
-  // TODO: init mip
-
-  mie = update_SGEI(mie, 0b0);
-  mie = update_VSEI(mie, 0b0);
-  mie = update_VSTI(mie, 0b0);
-  mie = update_VSSI(mie, 0b0);
-
   mideleg = update_SGEI(mideleg, 0b1); /* Note: SGEIE is "read-only one" only if GEILEN > 0 */
   mideleg = update_VSEI(mideleg, 0b1);
   mideleg = update_VSTI(mideleg, 0b1);

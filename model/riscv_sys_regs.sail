@@ -492,16 +492,12 @@ function legalize_mideleg(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = update_MEI(m, 0b0);
   let m = update_MTI(m, 0b0);
   let m = update_MSI(m, 0b0);
-
-  if haveHExt() then {
-     /* VS-mode interrupts are always delegated when the H-extesion is present */
-    let m = update_VSEI(m, 0b1);
-    let m = update_VSTI(m, 0b1);
-    let m = update_VSSI(m, 0b1);
-    /* If GEILEN > 0, SGEI is always delegated */
-    let m = update_SGEI(m, 0b1);
-  };
-
+  /* VS-mode interrupts are always delegated when the H-extesion is present */
+  let m = if haveHExt() then update_VSEI(m, 0b1) else m;
+  let m = if haveHExt() then update_VSTI(m, 0b1) else m;
+  let m = if haveHExt() then update_VSSI(m, 0b1) else m;
+  /* If GEILEN > 0, SGEI is always delegated */
+  let m = if haveHExt() then update_SGEI(m, 0b1) else m;
   m
 }
 

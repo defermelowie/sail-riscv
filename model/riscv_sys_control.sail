@@ -138,7 +138,8 @@ function exception_delegatee(e : ExceptionType, cur_p: Privilege, cur_v : Virtua
   else (cur_p, cur_v)
 }
 
-/* Interrupts are prioritized in privilege order, and for each
+/*!
+ * Interrupts are prioritized in privilege order, and for each
  * privilege, in the order: external, software, timers.
  */
 function findPendingInterrupt(ip : xlenbits) -> option(InterruptType) = {
@@ -159,7 +160,18 @@ function findPendingInterrupt(ip : xlenbits) -> option(InterruptType) = {
   else None()
 }
 
-/* Process the pending interrupts xip at a privilege according to
+/*! Translate VS-level interrupts to their S-level counterpart */
+function translateVSInterrupts(i : Minterrupts) -> Minterrupts = {
+  let t = i;
+  let t = [[t with SEI = i.VSEI()] with VSEI = 0b0];
+  let t = [[t with SSI = i.VSSI()] with VSSI = 0b0];
+  let t = [[t with STI = i.VSTI()] with VSTI = 0b0];
+  // TODO: extensions may translate interrupts as well
+  t
+}
+
+/*!
+ * Process the pending interrupts xip at a privilege according to
  * the enabled flags xie and the delegation in xideleg. Return
  * either the set of pending interrupts, or the set of interrupts
  * delegated to the next lower privilege.
@@ -183,48 +195,60 @@ function processPending(xip : Minterrupts, xie : Minterrupts, xideleg : xlenbits
   else    Ints_Empty()
 }
 
-/* Given the current privilege level, iterate over privileges to get a
- * pending set for an enabled privilege. This is only called for M/U or
- * M/S/U systems.
+/*!
+ * Given the current privilege and virtualization, iterate over privileges
+ * to get a pending set for an enabled privilege.
  *
- * We don't use the lowered views of {xie,xip} here, since the spec
- * allows for example the M_Timer to be delegated to the U-mode.
- *
- * FIXME: is the statement above still true?
+ * This is only called for M/U, M/S/U or M/HS/VS/U/VU systems.
  */
 function getPendingSet(priv : Privilege, virt: Virtualization) -> option((xlenbits, Privilege, Virtualization)) = {
   assert(haveUsrMode(), "no user mode: M/U, M/S/U or M/HS/VS/U/VU system required");
-  let effective_pending = mip.bits() & mie.bits();
-  if  effective_pending == zero_extend(0b0) then None() /* fast path */
-  else {
+  if  (mip.bits() & mie.bits()) == zeros() then /* fast path */
+    None()
+  else if haveNExt() then { /* Interrupt delegation by the deprecated N-extension (User-level interrupts) */
     /* Higher privileges than the current one are implicitly enabled,
      * while lower privileges are blocked.  An unsupported privilege is
      * considered blocked.
      */
-    let mIE  = priv != Machine | (priv == Machine & mstatus.MIE() == 0b1);
-    let sIE  = haveSupMode() & (priv == User | (priv == Supervisor & mstatus.SIE() == 0b1));
-    let uIE  = haveNExt() & (priv == User & mstatus.UIE() == 0b1);
-    let vsIE = haveHExt() & (priv == User | (priv == Supervisor & vsstatus.SIE() == 0b1));
-
-    let del_v = V0; // Bug: delegation virtualization may differ from V0 or original one
-
+    let mIE = priv != Machine | (priv == Machine & mstatus.MIE() == 0b1);
+    let sIE = haveSupMode() & (priv == User | (priv == Supervisor & mstatus.SIE() == 0b1));
+    let uIE = haveNExt() & (priv == User & mstatus.UIE() == 0b1);
     match processPending(mip, mie, mideleg.bits(), mIE) {
       Ints_Empty()      => None(),
       Ints_Pending(p)   => let r = (p, Machine, V0) in Some(r),
       Ints_Delegated(d) =>
         if not(haveSupMode()) then {
-          if uIE then let r = (d, User, del_v) in Some(r)
+          if uIE then let r = (d, User, V0) in Some(r)
           else                             None()
         } else {
-          /* the delegated bits are pending for HS-mode */
+          /* the delegated bits are pending for S-mode */
           match processPending(Mk_Minterrupts(d), mie, sideleg.bits(), sIE) {
             Ints_Empty()      => None(),
-            Ints_Pending(p)   => let r = (p, Supervisor, del_v) in Some(r),
+            Ints_Pending(p)   => let r = (p, Supervisor, V0) in Some(r),
             Ints_Delegated(d) => if   uIE
-                                 then let r = (d, User, del_v) in Some(r)
+                                 then let r = (d, User, V0) in Some(r)
                                  else None()
           }
         }
+    }
+  } else {
+    // Higher privileges than the current one are implicitly enabled, while lower privileges are blocked.
+    let mIE  = priv != Machine | (priv == Machine & mstatus.MIE() == 0b1);
+    let sIE  = haveSupMode() & (virt == V1 | priv == User | (priv == Supervisor & mstatus.SIE() == 0b1));
+    let vsIE = haveHExt() & virt == V1 & (priv == User | (priv == Supervisor & vsstatus.SIE() == 0b1)); // Enabled H-ext implies presence of S-mode
+
+    match processPending(mip, mie, mideleg.bits(), mIE) {
+      Ints_Empty()      => None(),
+      Ints_Pending(p)   => Some(p, Machine, V0),
+      Ints_Delegated(d) => match processPending(Mk_Minterrupts(d), mie, hideleg.bits(), sIE) {
+        Ints_Empty()      => None(),
+        Ints_Pending(p)   => Some(p, Supervisor, V0),
+        Ints_Delegated(d) => match processPending(Mk_Minterrupts(d), mie, zeros(), vsIE) {
+          Ints_Empty()      => None(),
+          Ints_Pending(p)   => Some(translateVSInterrupts(Mk_Minterrupts(p)).bits(), Supervisor, V1),
+          Ints_Delegated(d) => internal_error(__FILE__, __LINE__, "Delegate interrupts beyond VS-mode")
+        }
+      }
     }
   }
 }
@@ -584,7 +608,7 @@ function init_sys() -> unit = {
   then internal_error(__FILE__, __LINE__, "F and Zfinx cannot both be enabled!");
 
   if   sys_enable_next() & sys_enable_hext()
-  then internal_error(__FILE__, __LINE__, "The hypervisor currently does not consider the possibility of user-mode interrupts");
+  then internal_error(__FILE__, __LINE__, "The hypervisor extension currently does not consider the possibility of user-mode interrupts");
 
   mstatus = set_mstatus_SXL(mstatus, misa.MXL());
   mstatus = set_mstatus_UXL(mstatus, misa.MXL());
