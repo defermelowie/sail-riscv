@@ -382,7 +382,7 @@ function clause execute(LOAD_FP(imm, rs1, rd, width)) = {
     Ext_DataAddr_OK(vaddr) =>
       if   check_misaligned(vaddr, width)
       then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
-      else match translateAddr(vaddr, Read(Data)) {
+      else match translateAddr(vaddr, Read(Data), width) {
         TR_Failure(e, c, _) => { handle_exception(e, c); RETIRE_FAIL },
         TR_Address(addr, _) => {
           let (aq, rl, res) = (false, false, false);
@@ -448,7 +448,7 @@ function clause execute (STORE_FP(imm, rs2, rs1, width)) = {
     Ext_DataAddr_OK(vaddr) =>
       if   check_misaligned(vaddr, width)
       then { handle_mem_exception(vaddr, E_SAMO_Addr_Align()); RETIRE_FAIL }
-      else match translateAddr(vaddr, Write(Data)) {
+      else match translateAddr(vaddr, Write(Data), width) {
         TR_Failure(e, c, _) => { handle_exception(e, c); RETIRE_FAIL },
         TR_Address(addr, _) => {
           let eares : MemoryOpResult(unit) = match width {
