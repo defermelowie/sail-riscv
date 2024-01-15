@@ -152,7 +152,6 @@ function readCSR csr : csreg -> xlenbits = {
     (0x7a0,  _) => ~(tselect),  /* this indicates we don't have any trigger support */
 
     /* hypervisor extended supervisor mode */
-    /* TODO: Add read handle for ALL H-ext CSRs */
     (0x600,  _) => hstatus.bits(),
     (0x602,  _) => hedeleg.bits(),
     (0x603,  _) => hideleg.bits(),
@@ -164,10 +163,10 @@ function readCSR csr : csreg -> xlenbits = {
     (0x645,  _) => lower_mip_to_hvip(mip).bits(),
     (0x64A,  _) => htinst,
     (0xE12,  _) => hgeip, // hgeip is read-only
-    // (0x60A,  _) => henvcfg[sizeof(xlen) - 1 .. 0],
-    // (0x61A, 32) => henvcfg[63 .. 32],
+    // (0x60A,  _) => henvcfg[sizeof(xlen) - 1 .. 0], // TODO: henvcfg read handle
+    // (0x61A, 32) => henvcfg[63 .. 32],              // TODO: henvcfg read handle
     (0x680,  _) => hgatp,
-    // (0x6A8,  _) => hcontext,
+    // (0x6A8,  _) => hcontext,                       // TODO: henvcfg read handle
     (0x605,  _) => htimedelta[sizeof(xlen) - 1 .. 0],
     (0x615, 32) => htimedelta[63 .. 32],
 

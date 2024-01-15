@@ -166,7 +166,7 @@ function translateVSInterrupts(i : Minterrupts) -> Minterrupts = {
   let t = [[t with SEI = i.VSEI()] with VSEI = 0b0];
   let t = [[t with SSI = i.VSSI()] with VSSI = 0b0];
   let t = [[t with STI = i.VSTI()] with VSTI = 0b0];
-  // TODO: extensions may translate interrupts as well
+  // TODO: add hook for extensions to translate interrupts as well
   t
 }
 

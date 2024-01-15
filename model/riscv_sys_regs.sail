@@ -918,7 +918,7 @@ function write_seed_csr () -> option(xlenbits) = None()
 // upper fields so for simplicity we can use the same type.
 bitfield Envcfg : bits(64) = {
   // Supervisor TimeCmp Extension
-  STCE   : 63, // FIXME: How to test STI and VSTI if Sstc not implemented?
+  STCE   : 63,
   // Page Based Memory Types Extension
   PBMTE  : 62,
   // Reserved WPRI bits.
