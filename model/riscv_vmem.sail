@@ -1271,7 +1271,8 @@ function translateAddr_pv(vAddr : xlenbits,
 // Top-level addr-translation function
 // PUBLIC: invoked from instr-fetch and load/store/amo
 function translateAddr(vAddr   : xlenbits,
-                       ac      : AccessType(ext_access_type))
+                       ac      : AccessType(ext_access_type),
+                       width   : word_width) // TODO: use width to verify access is allowed upto (vAddr +  width)
                       -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
   // Effective privilege takes into account mstatus.MPRV, mstatus.MPP
   // See riscv_sys_regs.sail for effectivePrivilege() and cur_privilege
