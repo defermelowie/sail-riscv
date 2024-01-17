@@ -275,10 +275,12 @@ bitfield Hgatp64 : bits(64) = {
 function legalize_hgatp64(a : Architecture, o : bits(64), v : bits(64)) -> bits(64) = {
   let h = Mk_Hgatp64(v[63 .. 60] @ 0b00 @ v[57 .. 44] @ v[43 .. 2] @ 0b00);
   match hgatp64Mode_of_bits(a, h.Mode()) {
-    None()       => o,
-    Some(Sv32x4) => o,  /* Sv32x4 is unsupported for now */
     Some(Bare)   => h.Mode() @ zeros(60), /* remaining fields should be zero when hgatp.Mode is Bare */
-    Some(_)      => h.bits()
+    Some(Sv32x4) => o,                    /* Sv32x4 is currently unsupported for satp64 */
+    Some(Sv39x4) => h.bits(),
+    Some(Sv48x4) => h.bits(),
+    Some(Sv57x4) => o,                    /* Sv57x4 is not yet implemented */
+    _            => o,                    /* (V)S-stage modes are illegal for satp */
   }
 }
 

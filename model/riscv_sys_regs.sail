@@ -841,9 +841,12 @@ bitfield Satp64 : bits(64) = {
 function legalize_satp64(a : Architecture, o : bits(64), v : bits(64)) -> bits(64) = {
   let s = Mk_Satp64(v);
   match satp64Mode_of_bits(a, s.Mode()) {
-    None()     => o,
-    Some(Sv32) => o,  /* Sv32 is unsupported for now */
-    Some(_)    => s.bits()
+    Some(Bare) => s.Mode() @ zeros(60), /* remaining fields should be zero when satp.Mode is Bare */
+    Some(Sv32) => o,                    /* Sv32 is currently unsupported for satp64 */
+    Some(Sv39) => s.bits(),
+    Some(Sv48) => s.bits(),
+    Some(Sv57) => o,                    /* Sv57 is not yet implemented */
+    _          => o,                    /* G-stage modes are illegal for satp */
   }
 }
 

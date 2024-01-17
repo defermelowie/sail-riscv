@@ -1241,6 +1241,7 @@ function translateAddr_pv(vAddr : xlenbits,
                           priv  : Privilege,
                           virt  : Virtualization)
                           -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
+  // print("[DEBUG] Translate " ^ BitStr(vAddr) ^ " for " ^ to_str(priv, virt) ^ "-mode");
   // Internally the vmem code works with 64-bit values, whether xlen==32 or xlen==64
   // This 'extend' is a no-op when xlen==64 and extends when xlen==32
   let vAddr_64b : bits(64) = zero_extend(vAddr);
@@ -1272,7 +1273,7 @@ function translateAddr_pv(vAddr : xlenbits,
 // PUBLIC: invoked from instr-fetch and load/store/amo
 function translateAddr(vAddr   : xlenbits,
                        ac      : AccessType(ext_access_type),
-                       width   : word_width) // TODO: use width to verify access is allowed upto (vAddr +  width)
+                       width   : word_width) // FIXME: use width to verify access is permitted upto (vAddr +  width)
                       -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
   // Effective privilege takes into account mstatus.MPRV, mstatus.MPP
   // See riscv_sys_regs.sail for effectivePrivilege() and cur_privilege
