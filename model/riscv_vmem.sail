@@ -1112,7 +1112,7 @@ function translate_stage(vAddr,
   match stage {
     S  => {
       mode = translationMode(priv, stage);
-      // print("[DEBUG] Using " ^ to_str(mode) ^ " for S-stage address translation"); /* Debug: Print address translation mode */
+      print("[DEBUG] Using " ^ to_str(mode) ^ " for S-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
@@ -1142,7 +1142,7 @@ function translate_stage(vAddr,
     },
     VS => {
       mode = translationMode(priv, stage);
-      // print("[DEBUG] Using " ^ to_str(mode) ^ " for VS-stage address translation"); /* Debug: Print address translation mode */
+      print("[DEBUG] Using " ^ to_str(mode) ^ " for VS-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
@@ -1172,7 +1172,7 @@ function translate_stage(vAddr,
     },
     G  => {
       mode = translationMode(priv, stage);
-      // print("[DEBUG] Using " ^ to_str(mode) ^ " for G-stage address translation"); /* Debug: Print address translation mode */
+      print("[DEBUG] Using " ^ to_str(mode) ^ " for G-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32x4  => (true,                                 sv32x4_params),
@@ -1272,7 +1272,7 @@ function translateAddr_pv(vAddr : xlenbits,
 // PUBLIC: invoked from instr-fetch and load/store/amo
 function translateAddr(vAddr   : xlenbits,
                        ac      : AccessType(ext_access_type),
-                       width   : word_width) // TODO: use width to verify access is allowed upto (vAddr +  width)
+                       width   : word_width) // FIXME: use width to verify access is permitted upto (vAddr +  width)
                       -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
   // Effective privilege takes into account mstatus.MPRV, mstatus.MPP
   // See riscv_sys_regs.sail for effectivePrivilege() and cur_privilege
