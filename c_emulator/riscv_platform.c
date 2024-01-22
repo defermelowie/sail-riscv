@@ -167,6 +167,16 @@ mach_bits plat_htif_tohost(unit u)
   return rv_htif_tohost;
 }
 
+mach_bits plat_htif_fromhost(unit u)
+{
+  return rv_htif_fromhost;
+}
+
+mach_bits plat_htif_fromhost_val(unit u)
+{
+  return (mach_bits)rv_htif_fromhost_val;
+}
+
 unit memea(mach_bits len, sail_int n)
 {
   return UNIT;
