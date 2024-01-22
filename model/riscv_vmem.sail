@@ -1112,7 +1112,7 @@ function translate_stage(vAddr,
   match stage {
     S  => {
       mode = translationMode(priv, stage);
-      print("[DEBUG] Using " ^ to_str(mode) ^ " for S-stage address translation"); /* Debug: Print address translation mode */
+      // print("[DEBUG] Using " ^ to_str(mode) ^ " for S-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
@@ -1142,7 +1142,7 @@ function translate_stage(vAddr,
     },
     VS => {
       mode = translationMode(priv, stage);
-      print("[DEBUG] Using " ^ to_str(mode) ^ " for VS-stage address translation"); /* Debug: Print address translation mode */
+      // print("[DEBUG] Using " ^ to_str(mode) ^ " for VS-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32  => (true,                               sv32_params),
@@ -1172,7 +1172,7 @@ function translate_stage(vAddr,
     },
     G  => {
       mode = translationMode(priv, stage);
-      print("[DEBUG] Using " ^ to_str(mode) ^ " for G-stage address translation"); /* Debug: Print address translation mode */
+      // print("[DEBUG] Using " ^ to_str(mode) ^ " for G-stage address translation"); /* Debug: Print address translation mode */
       let (valid_va, sv_params) : (bool, SV_Params) = match mode {
         Bare => return TRi_Address(vAddr, ext_ptw),
         Sv32x4  => (true,                                 sv32x4_params),
@@ -1241,6 +1241,7 @@ function translateAddr_pv(vAddr : xlenbits,
                           priv  : Privilege,
                           virt  : Virtualization)
                           -> TR_Result(xlenbits, ExceptionType, ExceptionContext) = {
+  // print("[DEBUG] Translate " ^ BitStr(vAddr) ^ " for " ^ to_str(priv, virt) ^ "-mode");
   // Internally the vmem code works with 64-bit values, whether xlen==32 or xlen==64
   // This 'extend' is a no-op when xlen==64 and extends when xlen==32
   let vAddr_64b : bits(64) = zero_extend(vAddr);
