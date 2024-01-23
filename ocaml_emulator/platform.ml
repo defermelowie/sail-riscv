@@ -120,7 +120,8 @@ let htif_fromhost () =
   arch_bits_of_int64 (fromhost_addr ())
 
 (* todo: update val on term_read ()*)
-let htif_fromhost_val () = arch_bits_of_int 0x0
+let htif_fromhost_read () = arch_bits_of_int64 !P.htif_fromhost
+let htif_fromhost_write arch_bits = P.htif_fromhost := Big_int.to_int64 (uint arch_bits)
 
 (* Entropy Source - get random bits *)
 
@@ -166,7 +167,8 @@ let term_write char_bits =
 
 let term_read () =
   let c = P.term_read () in
-  arch_bits_of_int (int_of_char c)
+  P.htif_fromhost := Int64.of_int (0x100000000000000 lor (int_of_char c));
+  ()
 
 (* physical memory *)
 
