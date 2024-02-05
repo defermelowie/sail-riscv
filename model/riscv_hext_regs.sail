@@ -229,6 +229,10 @@ function lower_mie_to_hie(m : Minterrupts) -> Minterrupts = {
   h
 }
 
+/* **************************************************************** */
+/* Hypervisor environment configuration register                    */
+
+register henvcfg : Envcfg
 
 /* **************************************************************** */
 /* Hypervisor hpm-related registers                                 */

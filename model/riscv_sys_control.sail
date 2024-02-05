@@ -582,6 +582,21 @@ function handle_mem_exception(addr : xlenbits, e : ExceptionType) -> unit = {
 function handle_interrupt(i : InterruptType, del_priv : Privilege, del_virt: Virtualization) -> unit =
   set_next_pc(trap_handler(del_priv, del_virt, PC, I(i), empty_exception_context()))
 
+/*!
+ * Return whether or not FIOM is currently active, based on the current
+ * privilege and the menvcfg/senvcfg settings. This means that I/O fences
+ * imply memory fence.
+ */
+function is_fiom_active() -> bool = {
+  match (cur_privilege, cur_virtualization) {
+    (Machine, _) => false,
+    (Supervisor, V0) => menvcfg.FIOM() == 0b1,
+    (Supervisor, V1) => (menvcfg.FIOM() | henvcfg.FIOM()) == 0b1,
+    (User, V0) => (menvcfg.FIOM() | senvcfg.FIOM()) == 0b1,
+    (User, V1) => (menvcfg.FIOM() | henvcfg.FIOM() | senvcfg.FIOM()) == 0b1,
+  }
+}
+
 /* state state initialization */
 
 function init_sys() -> unit = {

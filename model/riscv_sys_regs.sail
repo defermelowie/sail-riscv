@@ -948,16 +948,6 @@ function legalize_envcfg(o : Envcfg, v : bits(64)) -> Envcfg = {
   o
 }
 
-// Return whether or not FIOM is currently active, based on the current
-// privilege and the menvcfg/senvcfg settings. This means that I/O fences
-// imply memory fence.
-function is_fiom_active() -> bool = {
-  match cur_privilege {
-    Machine => false,
-    Supervisor => menvcfg.FIOM() == 0b1,
-    User => (menvcfg.FIOM() | senvcfg.FIOM()) == 0b1,
-  }
-}
 /* vector csrs */
 register vstart : bits(16) /* use the largest possible length of vstart */
 register vxsat  : bits(1)
