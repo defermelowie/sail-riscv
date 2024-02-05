@@ -163,8 +163,8 @@ function readCSR csr : csreg -> xlenbits = {
     (0x645,  _) => lower_mip_to_hvip(mip).bits(),
     (0x64A,  _) => htinst,
     (0xE12,  _) => hgeip, // hgeip is read-only
-    // (0x60A,  _) => henvcfg[sizeof(xlen) - 1 .. 0], // TODO: henvcfg read handle
-    // (0x61A, 32) => henvcfg[63 .. 32],              // TODO: henvcfg read handle
+    (0x60A,  _) => henvcfg.bits()[sizeof(xlen) - 1 .. 0],
+    (0x61A, 32) => henvcfg.bits()[63 .. 32],
     (0x680,  _) => hgatp,
     // (0x6A8,  _) => hcontext,                       // TODO: henvcfg read handle
     (0x605,  _) => htimedelta[sizeof(xlen) - 1 .. 0],
@@ -282,6 +282,9 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x604,  _) => { mie = legalize_hie(mie, value); Some(lower_mie_to_hie(mie).bits()) },
     (0x606,  _) => { hcounteren = legalize_hcounteren(hcounteren, value); Some(zero_extend(hcounteren.bits())) },
     (0x607,  _) => { hgeie = legalize_hgeie(value); Some(hgeie) },
+    (0x60A, 64) => { henvcfg = legalize_envcfg(henvcfg, value); Some(henvcfg.bits()) },
+    (0x60A, 32) => { henvcfg = legalize_envcfg(henvcfg, henvcfg.bits()[63 .. 32] @ value); Some(henvcfg.bits()[31 .. 0]) },
+    (0x61A, 32) => { henvcfg = legalize_envcfg(henvcfg, value @ henvcfg.bits()[31 .. 0]); Some(henvcfg.bits()[63 .. 32]) },
     (0x643,  _) => { htval = value; Some(htval) },
     (0x644,  _) => { mip = legalize_hip(mip, value); Some(lower_mip_to_hip(mip).bits()) },
     (0x645,  _) => { mip = legalize_hvip(mip, value); Some(lower_mip_to_hvip(mip).bits()) },
