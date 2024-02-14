@@ -1,5 +1,6 @@
 #include "riscv_platform_impl.h"
 #include <unistd.h>
+#include <poll.h>
 #include <stdio.h>
 
 /* Settings of the platform implementation, with common defaults. */
@@ -56,7 +57,20 @@ void plat_term_write_impl(char c)
 
 void plat_term_read_impl(void)
 {
-  char ch = getc(stdin);
+  unsigned char ch;
+  // Set fromhost to 0 for early return
+  rv_htif_fromhost_val = 0;
+
+  // Poll stdin to check if there is a char available
+  struct pollfd pfd = {.fd = 0, .events = POLLIN};
+  int ret = poll(&pfd, 1, 0);
+  if (ret <= 0 || !(pfd.revents & POLLIN))
+    return;
+  // Read char from stdin
+  ret = read(0, &ch, 1);
+  if (ret <= 0)
+    return;
+  // Write char to fromhost
   rv_htif_fromhost_val = ((uint64_t)HTIF_DEV_CONSOLE << HTIF_DEV_SHIFT)
       | ((uint64_t)HTIF_CONSOLE_CMD_GETC << HTIF_CMD_SHIFT) | ((uint64_t)ch);
 }
