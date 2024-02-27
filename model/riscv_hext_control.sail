@@ -68,7 +68,7 @@
 /*  SUCH DAMAGE.                                                                         */
 /*=======================================================================================*/
 
-/* H-ext CSR defined handles */
+/* H-ext CSRs are defined whenever the hypervisor extension is present */
 function clause ext_is_CSR_defined(0x34A, _) = haveHExt() /* mtinst */
 function clause ext_is_CSR_defined(0x34B, _) = haveHExt() /* mtval2 */
 function clause ext_is_CSR_defined(0x600, _) = haveHExt() /* hstatus */
@@ -96,6 +96,67 @@ function clause ext_is_CSR_defined(0x242, _) = haveHExt() /* vscause */
 function clause ext_is_CSR_defined(0x243, _) = haveHExt() /* vstval */
 function clause ext_is_CSR_defined(0x244, _) = haveHExt() /* vsip */
 function clause ext_is_CSR_defined(0x280, _) = haveHExt() /* vsatp */
+
+function clause ext_read_CSR(0x200) = Some(vsstatus.bits())
+function clause ext_read_CSR(0x204) = Some(lower_mie_to_vsie(mie, hideleg).bits())
+function clause ext_read_CSR(0x205) = Some(get_trap_vector(Supervisor, V1))
+function clause ext_read_CSR(0x240) = Some(vsscratch)
+function clause ext_read_CSR(0x241) = Some(get_xret_target(Supervisor, V1))
+function clause ext_read_CSR(0x242) = Some(vscause.bits())
+function clause ext_read_CSR(0x243) = Some(vstval)
+function clause ext_read_CSR(0x244) = Some(lower_mip_to_vsip(mip, hideleg).bits())
+function clause ext_read_CSR(0x280) = Some(vsatp)
+function clause ext_read_CSR(0x34A) = Some(mtinst)
+function clause ext_read_CSR(0x34B) = Some(mtval2)
+function clause ext_read_CSR(0x600) = Some(hstatus.bits())
+function clause ext_read_CSR(0x602) = Some(hedeleg.bits())
+function clause ext_read_CSR(0x603) = Some(hideleg.bits())
+function clause ext_read_CSR(0x604) = Some(lower_mie_to_hie(mie).bits())
+function clause ext_read_CSR(0x605) = Some(htimedelta[sizeof(xlen) - 1 .. 0])
+function clause ext_read_CSR(0x606) = Some(zero_extend(hcounteren.bits()))
+function clause ext_read_CSR(0x607) = Some(hgeie)
+function clause ext_read_CSR(0x60A) = Some(henvcfg.bits()[sizeof(xlen) - 1 .. 0])
+function clause ext_read_CSR(0x615) = Some(zero_extend(htimedelta[63 .. 32]))
+function clause ext_read_CSR(0x61A) = Some(zero_extend(henvcfg.bits()[63 .. 32]))
+function clause ext_read_CSR(0x643) = Some(htval)
+function clause ext_read_CSR(0x644) = Some(lower_mip_to_hip(mip).bits())
+function clause ext_read_CSR(0x645) = Some(lower_mip_to_hvip(mip).bits())
+function clause ext_read_CSR(0x64A) = Some(htinst)
+// Read of hgatp (0x680) is handled directly in inst_zicsr
+// TODO: read handle for hcontext (0x6A8)
+function clause ext_read_CSR(0xE12) = Some(hgeip)
+
+function clause ext_write_CSR(0x200, value) = { vsstatus = legalize_vsstatus(vsstatus, value); Some(vsstatus.bits()) }
+function clause ext_write_CSR(0x204, value) = { mie = legalize_vsie(mie, hideleg, value); Some(lower_mie_to_vsie(mie, hideleg).bits()) }
+function clause ext_write_CSR(0x205, value) = { Some(set_trap_vector(Supervisor, V1, value)) }
+function clause ext_write_CSR(0x240, value) = { vsscratch = value; Some(vsscratch) }
+function clause ext_write_CSR(0x241, value) = { Some(set_xret_target(Supervisor, V1, value)) }
+function clause ext_write_CSR(0x242, value) = { vscause->bits() = value; Some(vscause.bits()) }
+function clause ext_write_CSR(0x243, value) = { vstval = value; Some(vstval) }
+function clause ext_write_CSR(0x244, value) = { mip = legalize_vsip(mip, hideleg, value); Some(lower_mip_to_vsip(mip, hideleg).bits()) }
+function clause ext_write_CSR(0x280, value) = { vsatp = value; Some(vsatp) }
+function clause ext_write_CSR(0x34A, value) = { mtinst = value; Some(mtinst) }
+function clause ext_write_CSR(0x34B, value) = { mtval2 = value; Some(mtval2) }
+function clause ext_write_CSR(0x600, value) = { hstatus = legalize_hstatus(hstatus, value); Some(hstatus.bits()) }
+function clause ext_write_CSR(0x602, value) = { hedeleg = legalize_hedeleg(hedeleg, value); Some(hedeleg.bits()) }
+function clause ext_write_CSR(0x603, value) = { hideleg = legalize_hideleg(hideleg, value); Some(hideleg.bits()) }
+function clause ext_write_CSR(0x604, value) = { mie = legalize_hie(mie, value); Some(lower_mie_to_hie(mie).bits()) }
+function clause ext_write_CSR(0x605, value) = { htimedelta[(sizeof(xlen) - 1) .. 0] = value; Some(htimedelta[(sizeof(xlen) - 1) .. 0])}
+function clause ext_write_CSR(0x606, value) = { hcounteren = legalize_hcounteren(hcounteren, value); Some(zero_extend(hcounteren.bits())) }
+function clause ext_write_CSR(0x607, value) = { hgeie = legalize_hgeie(value); Some(hgeie) }
+function clause ext_write_CSR(0x60A, value) = { henvcfg = if sizeof(xlen) == 32
+                                                          then legalize_envcfg(henvcfg, henvcfg.bits()[63 .. 32] @ value)
+                                                          else legalize_envcfg(henvcfg, value);
+                                                Some(henvcfg.bits()) }
+function clause ext_write_CSR(0x615, value) = { htimedelta[63 .. 32] = value[31 .. 0]; Some(zero_extend(htimedelta[63 .. 32]))} // zero_extend and value[31..0] to appease type checker
+function clause ext_write_CSR(0x61A, value) = { henvcfg = legalize_envcfg(henvcfg, value[31 .. 0] @ henvcfg.bits()[31 .. 0]); Some(zero_extend(henvcfg.bits()[63 .. 32])) } // zero_extend and value[31..0] to appease type checker
+function clause ext_write_CSR(0x643, value) = { htval = value; Some(htval) }
+function clause ext_write_CSR(0x644, value) = { mip = legalize_hip(mip, value); Some(lower_mip_to_hip(mip).bits()) }
+function clause ext_write_CSR(0x645, value) = { mip = legalize_hvip(mip, value); Some(lower_mip_to_hvip(mip).bits()) }
+function clause ext_write_CSR(0x64A, value) = { htinst = value; Some(htinst) }
+// Write of hgatp (0x680) is handled directly in inst_zicsr
+// TODO: write handle for hcontext (0x6A8)
+// Write handler for hgeip is not required since it's read-only
 
 /* Initialize hypervisor extension */
 function init_hext() -> unit = {
@@ -148,7 +209,7 @@ function init_hext() -> unit = {
   vsatp = zeros();
 }
 
-/*
+/*!
  * Determine if an illegal CSR access should raise a "virtual instruction exception" instead of
  * an "illegal instruction exception"
  *
