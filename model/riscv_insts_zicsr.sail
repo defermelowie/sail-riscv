@@ -151,24 +151,9 @@ function readCSR csr : csreg -> xlenbits = {
     /* trigger/debug */
     (0x7a0,  _) => ~(tselect),  /* this indicates we don't have any trigger support */
 
-    /* hypervisor extended supervisor mode */
-    // (0x600,  _) => hstatus.bits(),
-    // (0x602,  _) => hedeleg.bits(),
-    // (0x603,  _) => hideleg.bits(),
-    // (0x604,  _) => lower_mie_to_hie(mie).bits(),
-    // (0x606,  _) => zero_extend(hcounteren.bits()),
-    // (0x607,  _) => hgeie,
-    // (0x643,  _) => htval,
-    // (0x644,  _) => lower_mip_to_hip(mip).bits(),
-    // (0x645,  _) => lower_mip_to_hvip(mip).bits(),
-    // (0x64A,  _) => htinst,
-    // (0xE12,  _) => hgeip, // hgeip is read-only
-    // (0x60A,  _) => henvcfg.bits()[sizeof(xlen) - 1 .. 0],
-    // (0x61A, 32) => henvcfg.bits()[63 .. 32],
+    // NOTE: hgatp read handle could not be defined in riscv_hext_control.sail because it requires definitions from riscv_vmem.sail
     (0x680,  _) => hgatp,
-    // // (0x6A8,  _) => hcontext,                       // TODO: hcontext read handle
-    // (0x605,  _) => htimedelta[sizeof(xlen) - 1 .. 0],
-    // (0x615, 32) => htimedelta[63 .. 32],
+
 
     /* supervisor mode */
     (0x100,  _) => if cur_virtualization == V1 then vsstatus.bits() else lower_mstatus(mstatus).bits(),
@@ -184,17 +169,6 @@ function readCSR csr : csreg -> xlenbits = {
     (0x143,  _) => if cur_virtualization == V1 then vstval else stval,
     (0x144,  _) => if cur_virtualization == V1 then lower_mip_to_vsip(mip, hideleg).bits() else lower_mip_to_sip(mip, mideleg).bits(),
     (0x180,  _) => if cur_virtualization == V1 then vsatp else satp,
-
-    /* virtual supervisor mode */
-    // (0x200,  _) => vsstatus.bits(),
-    // (0x204,  _) => lower_mie_to_vsie(mie, hideleg).bits(),
-    // (0x205,  _) => get_trap_vector(Supervisor, V1),
-    // (0x240,  _) => vsscratch,
-    // (0x241,  _) => get_xret_target(Supervisor, V1),
-    // (0x242,  _) => vscause.bits(),
-    // (0x243,  _) => vstval,
-    // (0x244,  _) => lower_mip_to_vsip(mip, hideleg).bits(),
-    // (0x280,  _) => vsatp,
 
     /* user mode counters */
     (0xC00,  _) => mcycle[(sizeof(xlen) - 1) .. 0],
@@ -273,25 +247,8 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     /* trigger/debug */
     (0x7a0,  _) => { tselect = value; Some(tselect) },
 
-    /* hypervisor extendended supervisor mode */
-    // (0x34A,  _) => { mtinst = value; Some(mtinst) },
-    // (0x34B,  _) => { mtval2 = value; Some(mtval2) },
-    // (0x600,  _) => { hstatus = legalize_hstatus(hstatus, value); Some(hstatus.bits()) },
-    // (0x602,  _) => { hedeleg = legalize_hedeleg(hedeleg, value); Some(hedeleg.bits()) },
-    // (0x603,  _) => { hideleg = legalize_hideleg(hideleg, value); Some(hideleg.bits()) },
-    // (0x604,  _) => { mie = legalize_hie(mie, value); Some(lower_mie_to_hie(mie).bits()) },
-    // (0x606,  _) => { hcounteren = legalize_hcounteren(hcounteren, value); Some(zero_extend(hcounteren.bits())) },
-    // (0x607,  _) => { hgeie = legalize_hgeie(value); Some(hgeie) },
-    // (0x60A, 64) => { henvcfg = legalize_envcfg(henvcfg, value); Some(henvcfg.bits()) },
-    // (0x60A, 32) => { henvcfg = legalize_envcfg(henvcfg, henvcfg.bits()[63 .. 32] @ value); Some(henvcfg.bits()[31 .. 0]) },
-    // (0x61A, 32) => { henvcfg = legalize_envcfg(henvcfg, value @ henvcfg.bits()[31 .. 0]); Some(henvcfg.bits()[63 .. 32]) },
-    // (0x643,  _) => { htval = value; Some(htval) },
-    // (0x644,  _) => { mip = legalize_hip(mip, value); Some(lower_mip_to_hip(mip).bits()) },
-    // (0x645,  _) => { mip = legalize_hvip(mip, value); Some(lower_mip_to_hvip(mip).bits()) },
-    // (0x64A,  _) => { htinst = value; Some(htinst) },
+    // NOTE: hgatp write handle could not be defined in riscv_hext_control.sail because it requires definitions from riscv_vmem.sail
     (0x680,  _) => { hgatp = legalize_hgatp(cur_Architecture(), hgatp, value); Some(hgatp) },
-    // (0x605,  _) => { htimedelta[(sizeof(xlen) - 1) .. 0] = value; Some(htimedelta[(sizeof(xlen) - 1) .. 0])},
-    // (0x615, 32) => { htimedelta[63 .. 32] = value; Some(htimedelta[63 .. 32])},
 
     /* supervisor mode */
     (0x100,  _) => match cur_virtualization {

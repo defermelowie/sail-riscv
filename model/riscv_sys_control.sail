@@ -112,7 +112,7 @@ function exception_delegatee(e : ExceptionType, cur_p: Privilege, cur_v : Virtua
       (false, _, _)       => (Machine, V0),
       (true, false, _)    => (Supervisor, V0),
       (true, true, false) => (Supervisor, V1),
-      (true, true, true)  => (User, V1)
+      (true, true, true)  => internal_error(__FILE__, __LINE__, "Hypervisor extension does not consider the possibility of U-mode or VU-mode interrupts")
     }
   };
   /* Check if delegation privilege exists:
@@ -122,7 +122,7 @@ function exception_delegatee(e : ExceptionType, cur_p: Privilege, cur_v : Virtua
   let (del_p, del_v): (Privilege, Virtualization) = match del_p {
     Machine    => (Machine, V0),
     Supervisor => if haveSupMode() then (Supervisor, del_v)
-                  else if haveNExt() then (User, cur_v) /* Use original virt mode when delegating directly to U-mode, otherwise a trap attempt from VU->HS would end up in U */
+                  else if haveNExt() then (User, V0) /* Use V=0 when delegating directly to U-mode, since H-ext shouldn't be present in this case */
                   else (Machine, V0),
     User       => if haveUsrMode() then (User, del_v)
                   else if haveSupMode() then (Supervisor, del_v)

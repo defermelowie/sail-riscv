@@ -209,9 +209,7 @@ function init_hext() -> unit = {
   vsatp = zeros();
 }
 
-/*!
- * Determine if an illegal CSR access should raise a "virtual instruction exception" instead of
- * an "illegal instruction exception"
+/* FIXME: The cases below should probably be checked in unittests instead of listed here
  *
  * According to the spec. (V20211203 - Section 9.6), this should happen in the following cases:
  *   [X] in VS-mode, attempts to access a non-high-half counter CSR when the corresponding bit
@@ -236,7 +234,7 @@ function init_hext() -> unit = {
  *       partner would be allowed in HS-mode, assuming mstatus.TVM=0;
  *   [X] in VS-mode, attempts to access satp, when hstatus.VTVM=1
  */
-/* FIXME: The above cases should probably be checked in unittests instead of listed here */
+/*! Determine if an illegal CSR access should raise a "virtual instruction exception" instead of an "illegal instruction exception" */
 function csr_access_raises_virtual_instr(csr : csreg, p : Privilege, v: Virtualization, isWrite : bool) -> bool = {
   if v == V0
   then false
