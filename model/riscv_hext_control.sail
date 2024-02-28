@@ -147,7 +147,7 @@ function clause ext_write_CSR(0x607, value) = { hgeie = legalize_hgeie(value); S
 function clause ext_write_CSR(0x60A, value) = { henvcfg = if sizeof(xlen) == 32
                                                           then legalize_envcfg(henvcfg, henvcfg.bits()[63 .. 32] @ value)
                                                           else legalize_envcfg(henvcfg, value);
-                                                Some(henvcfg.bits()) }
+                                                Some(henvcfg.bits()[(sizeof(xlen) - 1) .. 0]) }
 function clause ext_write_CSR(0x615, value) = { htimedelta[63 .. 32] = value[31 .. 0]; Some(zero_extend(htimedelta[63 .. 32]))} // zero_extend and value[31..0] to appease type checker
 function clause ext_write_CSR(0x61A, value) = { henvcfg = legalize_envcfg(henvcfg, value[31 .. 0] @ henvcfg.bits()[31 .. 0]); Some(zero_extend(henvcfg.bits()[63 .. 32])) } // zero_extend and value[31..0] to appease type checker
 function clause ext_write_CSR(0x643, value) = { htval = value; Some(htval) }

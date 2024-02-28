@@ -96,7 +96,7 @@ function exception_delegatee(e : ExceptionType, cur_p: Privilege, cur_v : Virtua
    *
    * medeleg delegates to HS-mode
    * hedeleg delegates to VS-mode
-   * sedeleg delegates to (V)U-mode
+   * sedeleg delegates to U-mode
    */
   let idx = num_of_ExceptionType(e);
   let del_to_hs = bit_to_bool(medeleg.bits()[idx]);
