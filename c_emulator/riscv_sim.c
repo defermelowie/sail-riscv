@@ -49,12 +49,14 @@ const char *RV32ISA = "RV32IMAC";
 #define CSR_MTVAL 0x343
 #define CSR_MIP 0x344
 
-#define OPT_TRACE_OUTPUT 1000
-#define OPT_ENABLE_WRITABLE_FIOM 1001
-#define OPT_PMP_COUNT 1002
-#define OPT_PMP_GRAIN 1003
-#define OPT_ENABLE_SVINVAL 1004
-#define OPT_ENABLE_ZCB 10014
+enum {
+  OPT_TRACE_OUTPUT = 1000,
+  OPT_ENABLE_WRITABLE_FIOM,
+  OPT_PMP_COUNT,
+  OPT_PMP_GRAIN,
+  OPT_ENABLE_SVINVAL,
+  OPT_ENABLE_ZCB,
+};
 
 static bool do_dump_dts = false;
 static bool do_show_times = false;
@@ -248,6 +250,7 @@ static int process_args(int argc, char **argv)
   while (true) {
     c = getopt_long(argc, argv,
                     "a"
+                    "B"
                     "d"
                     "m"
                     "P"
@@ -281,6 +284,10 @@ static int process_args(int argc, char **argv)
     switch (c) {
     case 'a':
       report_arch();
+      break;
+    case 'B':
+      fprintf(stderr, "enabling B extension.\n");
+      rv_enable_bext = true;
       break;
     case 'd':
       fprintf(stderr, "enabling dirty update.\n");
